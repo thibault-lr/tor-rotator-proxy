@@ -12,15 +12,6 @@ export function createSessionRotation(
   ttlMs: number,
   now = performance.now(),
 ) {
-  if (
-    !Number.isInteger(count) ||
-    count < 1 ||
-    count > 256 ||
-    !Number.isSafeInteger(ttlMs) ||
-    ttlMs <= 0
-  ) {
-    throw new Error("Invalid session count or TTL");
-  }
   const sessions = Array.from({ length: count }, (_, id) => ({
     expiresAt: now + (ttlMs * (id + 1)) / count,
     credentials: newCredentials(),
@@ -84,6 +75,7 @@ export async function openTorConnection(
   try {
     await once(socket, "connect");
     socket.prependListener("data", requireAuthentication);
+
     const connected = await SocksClient.createConnection({
       command: "connect",
       proxy: {
@@ -96,6 +88,7 @@ export async function openTorConnection(
       timeout: timeoutMs,
       existing_socket: socket,
     });
+
     return connected.socket;
   } catch (cause) {
     socket.destroy();

@@ -24,3 +24,5 @@ export const config = {
   headerTimeoutMs: 10_000,
   shutdownGraceMs: 10_000,
 };
+
+export type Config = typeof config;

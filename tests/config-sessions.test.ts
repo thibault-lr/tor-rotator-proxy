@@ -82,12 +82,3 @@ test("rotation reuses credentials in order until their staggered renewal", () =>
     first[0]!.username,
   );
 });
-
-test("rotation rejects invalid size and renewal intervals", () => {
-  for (const count of [0, -1, 257, 0.5, NaN, Infinity]) {
-    assert.throws(() => createSessionRotation(count, 60_000));
-  }
-  for (const ttl of [0, -1, NaN, Infinity, 0.5]) {
-    assert.throws(() => createSessionRotation(1, ttl));
-  }
-});

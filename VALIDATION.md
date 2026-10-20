@@ -1,5 +1,19 @@
 # Standalone extraction validation
 
+## October 21, 2026 — trust internal rotation inputs
+
+Removed the session-count/TTL guard and its invalid-argument test. The runtime
+caller supplies sixteen sessions per configured endpoint and a fixed 300_000 ms
+TTL. The helper no longer enforces its former 256-session cap; endpoint-input
+validation remains part of the known configuration gap. Renewal and reuse tests
+remain unchanged and pass.
+
+Format, lint, strict type checking and JavaScript build pass. The isolated
+Node 24.22.0 Docker suite passes 35 of 37 tests, with the same two configuration
+failures. Native yarn check still encounters those failures and the sandbox's
+loopback restriction. No fresh image build, public Tor request, deployment or
+push was performed.
+
 ## October 21, 2026 — minimal request failure handling
 
 Removed custom HTTP error responses, timeout error classification and the
