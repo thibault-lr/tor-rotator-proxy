@@ -1,6 +1,6 @@
 # Tor Rotator
 
-A small HTTP proxy that sends requests through Tor and rotates SOCKS identities
+HTTP proxy that sends requests through Tor and rotates SOCKS identities
 internally. Clients use their usual HTTP proxy setting; no SDK or special headers.
 HTTPS uses CONNECT, keeping TLS between the client and the destination.
 The only runtime dependency is `socks`.
@@ -9,6 +9,17 @@ The only runtime dependency is `socks`.
 
 Run these commands from this directory with Docker Desktop running and available
 disk space. The optional `.env` file is not required for the defaults.
+
+```
+# Native proxy settings. Compose fixes these for its internal network.
+PROXY_BIND=127.0.0.1:5566
+TOR_SOCKS_ADDRS=127.0.0.1:9050
+
+# Docker host port only; useful when another proxy already uses 5566.
+HOST_PROXY_PORT=5566
+```
+
+## Run
 
 ```sh
 docker compose up --build -d
@@ -69,11 +80,12 @@ corepack yarn start
 ## Configuration and rotation
 
 `src/config.ts` exports a constant object checked with `satisfies Config`.
-`Config` is the input type of the proxy; startup passes the object directly:
+`Config` lives in `src/types.ts` and is the input type of the proxy; startup
+passes the object directly:
 
 ```ts
 import { config } from "./config.ts";
-import { createProxy } from "./proxy.ts";
+import { createProxy } from "./server.ts";
 
 const proxy = createProxy(config);
 ```
@@ -146,7 +158,9 @@ Tor network and the test duration; they are not a uniqueness guarantee.
 src/
   main.ts       Start and stop the server
   config.ts     Two environment inputs and fixed transport limits
-  proxy.ts      HTTP/CONNECT forwarding and connection cleanup
+  server.ts     Server events, admission, cancellation and shutdown
+  proxy.ts      Request validation and HTTP/CONNECT forwarding
+  types.ts      Shared configuration and endpoint types
   tor.ts        Internal rotation and authenticated SOCKS connections
   timeouts.ts   Idle and lifetime deadlines
 script/

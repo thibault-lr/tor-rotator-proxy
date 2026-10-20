@@ -1,4 +1,4 @@
-import type { Config } from "./proxy.ts";
+import type { Config } from "./types.ts";
 
 const mapToEndpoint = (endpoint: string) => {
   const url = new URL(`tcp://${endpoint}`);

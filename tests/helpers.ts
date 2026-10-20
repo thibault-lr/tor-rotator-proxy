@@ -6,7 +6,8 @@ import { createConnection, createServer, type Socket } from "node:net";
 import type { TestContext } from "node:test";
 
 import { config as defaultConfig } from "../src/config.ts";
-import { createProxy, type Config } from "../src/proxy.ts";
+import { createProxy } from "../src/server.ts";
+import type { Config } from "../src/types.ts";
 
 export type Route = {
   host: string;

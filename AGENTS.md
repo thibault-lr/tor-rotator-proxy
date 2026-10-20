@@ -3,6 +3,7 @@
 - Write all code identifiers, comments and docstrings in English only (100%). UI labels, messages, logs, test descriptions and documentation must also be in English. Preserve external content, protocol identifiers and historical collected data.
 - Read `README.md` and the affected callers before changing the proxy. This project owns proxy transport and Tor deployment; keep client integrations compatible.
 - Keep the runtime on native Node HTTP/TCP/streams. Prefer small functions with clear responsibilities and explicit inputs; do not add frameworks, dependency injection layers, generic transports or classes with a single artificial implementation.
+- Keep server construction, connection admission, cancellation and shutdown in server.ts. Keep request validation and HTTP/CONNECT forwarding in proxy.ts. Pass request context to handlers instead of sharing mutable connection registries.
 - Keep server factories focused on assembling handlers. Put parsing, configuration and request helpers at module scope. Small event callbacks are fine. Keep lifecycle closures local when they own a socket, timer or idempotent cleanup; extracting them must make the code easier to follow.
 - Group decimal integer literals of four or more digits with underscores: `1_000`, `60_000`, `65_536`. Do not change numeric strings, wire formats or external identifiers.
 - Always use braces for control-flow bodies, including single-statement `if`, `else` and loops. Oxlint enforces this with `curly`.

@@ -4,7 +4,8 @@ import { createConnection, type Socket } from "node:net";
 
 import { SocksClient } from "socks";
 
-export type Target = { host: string; port: number };
+import type { Target } from "./types.ts";
+
 export type Credentials = { username: string; password: string };
 export class ConnectTimeoutError extends Error {}
 

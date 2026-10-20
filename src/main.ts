@@ -1,11 +1,11 @@
 import { once } from "node:events";
 
 import { config } from "./config.ts";
-import { createProxy } from "./proxy.ts";
+import { createProxy } from "./server.ts";
 
 async function main() {
   const { proxyBind } = config;
-  const proxy = createProxy();
+  const proxy = createProxy(config);
 
   try {
     proxy.server.listen(proxyBind.port, proxyBind.host);

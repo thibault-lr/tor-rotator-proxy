@@ -1,5 +1,35 @@
 # Standalone extraction validation
 
+## October 21, 2026 — server and proxy separation
+
+Moved createProxy and connection lifecycle management into src/server.ts. It
+owns admission, header deadlines, cancellation, pending work and graceful
+shutdown. src/proxy.ts retains request validation, Tor connection opening and
+HTTP/CONNECT forwarding. Handlers receive configuration, session selection,
+an AbortSignal and a close callback; connection registries remain private to
+server.ts. Shared Config and Target types now live in src/types.ts. Updated
+startup, the socket harness, README and engineering rules for the new boundary.
+
+The factory still returns server and stop. Existing protocol parsing, Tor
+isolation, streaming, half-close behavior and timeout values are preserved.
+Added one socket regression covering both HTTP and CONNECT first requests on
+connections accepted before shutdown: each receives 503 without contacting SOCKS.
+
+Format, lint, strict type checking and the JavaScript build pass under Node
+22.22.1. The complete suite passes 35 of 37 tests under Node 24.22.0 in an
+existing local Docker image with networking disabled and source mounted
+read-only. The new shutdown regression passes. Only the two previously recorded
+configuration tests fail (endpoint whitespace and invalid-endpoint rejection).
+Native yarn check passes static checks, then fails those two tests and 29 socket
+tests because the execution sandbox denies loopback listen.
+
+Compiled JavaScript, including dist/server.js, starts and exits cleanly on
+SIGTERM in the isolated image with no TypeScript sources mounted. A fresh
+docker compose build proxy still fails in Docker's credential helper while
+resolving the Dockerfile frontend, before application build commands run.
+No live proxy was restarted, public Tor request sent, volume changed or push
+performed.
+
 ## October 20, 2026 — compiled JavaScript production build
 
 Added tsconfig.build.json to compile only src into dist, rewriting relative

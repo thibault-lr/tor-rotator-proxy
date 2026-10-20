@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { once } from "node:events";
 import type { Socket } from "node:net";
 import { test } from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
@@ -113,6 +114,31 @@ test(
     await app.proxy.stop();
     await waitForIdle(app);
     assert.equal((await readToEnd(client)).length, 0);
+  },
+);
+
+test(
+  "shutdown refuses a first request on an already accepted connection",
+  { timeout: 6_000 },
+  async (t) => {
+    for (const requestLine of [
+      "GET http://origin.invalid/ HTTP/1.1",
+      "CONNECT origin.invalid:443 HTTP/1.1",
+    ]) {
+      let calls = 0;
+      const app = await harness(t, async () => {
+        calls++;
+      });
+      const accepted = once(app.proxy.server, "connection");
+      const client = await app.connect();
+      await accepted;
+      const stopped = app.proxy.stop();
+      client.write(`${requestLine}\r\nHost: origin.invalid\r\n\r\n`);
+      assert.match((await readToEnd(client)).toString(), /^HTTP\/1\.1 503 /);
+      await stopped;
+      await waitForIdle(app);
+      assert.equal(calls, 0);
+    }
   },
 );
 
