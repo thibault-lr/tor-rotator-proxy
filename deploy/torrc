@@ -1,0 +1,5 @@
+ClientOnly 1
+SocksPort 0.0.0.0:9050 IsolateSOCKSAuth
+DataDirectory /var/lib/tor
+RunAsDaemon 0
+Log notice stdout

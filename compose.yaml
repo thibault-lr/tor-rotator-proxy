@@ -1,0 +1,40 @@
+name: tor-rotator
+
+services:
+  tor:
+    build:
+      context: .
+      dockerfile: deploy/tor.Dockerfile
+    restart: unless-stopped
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    read_only: true
+    volumes:
+      - tor-data:/var/lib/tor
+    ports:
+      - "127.0.0.1:${HOST_PROXY_PORT:-5566}:5566"
+    stop_grace_period: 20s
+
+  proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      tor:
+        condition: service_started
+        restart: true
+    network_mode: service:tor
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    read_only: true
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      PROXY_BIND: 0.0.0.0:5566
+      TOR_SOCKS_ADDRS: 127.0.0.1:9050
+    stop_grace_period: 20s
+
+volumes:
+  tor-data:

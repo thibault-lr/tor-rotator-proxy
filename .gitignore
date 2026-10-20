@@ -1,0 +1,14 @@
+/node_modules/
+/.cache/
+/.run/
+/.env
+/.env.*
+!/.env.example
+/.vscode/
+.DS_Store
+*.log
+__pycache__/
+*.pyc
+
+.yarn/
+.turbo/

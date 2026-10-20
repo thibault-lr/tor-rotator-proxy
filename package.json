@@ -1,0 +1,32 @@
+{
+  "name": "tor-rotator",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "scripts": {
+    "start": "node src/main.ts",
+    "dev": "node --watch src/main.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test tests/*.test.ts",
+    "check": "yarn lint && yarn format:check && yarn typecheck && yarn test",
+    "build": "tsc --noEmit",
+    "benchmark": "node script/benchmark.ts",
+    "lint": "oxlint --config .oxlintrc.json --deny-warnings src tests script",
+    "lint:fix": "yarn lint --fix",
+    "format": "oxfmt --config .oxfmtrc.json --write .",
+    "format:check": "oxfmt --config .oxfmtrc.json --check ."
+  },
+  "devDependencies": {
+    "@types/node": "22.19.19",
+    "oxfmt": "0.71.0",
+    "oxlint": "1.86.0",
+    "typescript": "5.9.3"
+  },
+  "dependencies": {
+    "socks": "2.8.10"
+  },
+  "packageManager": "yarn@4.18.1+sha512.b2e1e7524f654f2749d32b4ebcb4622473cb5bcbc485df2007e12a154e50162a4d795526768bc5f5b8f81717bfd79deb2472813d86fb5ae2eb551fa9c872b08f"
+}

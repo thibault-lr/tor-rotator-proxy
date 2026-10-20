@@ -1,0 +1,14 @@
+node_modules/
+.cache/
+.run/
+.git/
+.env
+.env.*
+!.env.example
+*.md
+__pycache__/
+*.pyc
+*.log
+.DS_Store
+.yarn/
+.turbo/
