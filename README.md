@@ -162,4 +162,8 @@ corepack yarn build
 
 Node runs TypeScript directly; `build` checks types. Tests use loopback sockets,
 fake SOCKS endpoints and a fake Docker CLI without public traffic.
+
+`docker build --target check .` runs the checks in Linux. The default Docker build
+produces the production image independently, without running checks. Before
+publishing, require both checks and the production build to pass on the same commit.
 See [VALIDATION.md](VALIDATION.md) for the checks actually performed.

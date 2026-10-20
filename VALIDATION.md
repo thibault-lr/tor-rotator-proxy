@@ -1,5 +1,19 @@
 # Standalone extraction validation
 
+## October 20, 2026 — independent Docker checks and production build
+
+The Dockerfile now shares dependency installation between an explicit `check`
+target and production dependency pruning. The final image has no dependency on
+the `check` target. Checks remain available through `yarn check` or
+`docker build --target check .`; successful checks and a successful production
+build on the same commit are required before publishing.
+
+Format, lint and the existing TypeScript build pass under Node 22.22.1. A fresh
+`docker compose build proxy` attempt fails in Docker's credential helper while
+resolving the Dockerfile frontend image, before running project commands. Full
+image construction remains unverified. No runtime code changed; the two known
+configuration test failures remain unresolved.
+
 ## October 20, 2026 — Git preparation and code style
 
 Initialized the standalone Git repository on `main`. Local environment files,
