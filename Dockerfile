@@ -6,11 +6,16 @@ COPY package.json yarn.lock .yarnrc.yml ./
 RUN --mount=type=cache,target=/root/.yarn/berry/cache yarn install --immutable
 
 FROM dependencies AS check
-COPY tsconfig.json .oxlintrc.json .oxfmtrc.json ./
+COPY tsconfig.json tsconfig.build.json .oxlintrc.json .oxfmtrc.json ./
 COPY src ./src
 COPY tests ./tests
 COPY script ./script
 RUN --network=none yarn check
+
+FROM dependencies AS build
+COPY tsconfig.json tsconfig.build.json ./
+COPY src ./src
+RUN --network=none yarn build
 
 FROM dependencies AS production-dependencies
 RUN --network=none --mount=type=cache,target=/root/.yarn/berry/cache yarn workspaces focus --production
@@ -20,8 +25,8 @@ WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=production-dependencies /app/node_modules ./node_modules
 COPY package.json ./
-COPY src ./src
+COPY --from=build /app/dist ./dist
 USER 10001:10001
 EXPOSE 5566
 STOPSIGNAL SIGTERM
-CMD ["node", "src/main.ts"]
+CMD ["node", "dist/main.js"]

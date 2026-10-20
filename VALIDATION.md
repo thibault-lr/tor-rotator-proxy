@@ -1,5 +1,27 @@
 # Standalone extraction validation
 
+## October 20, 2026 — compiled JavaScript production build
+
+Added tsconfig.build.json to compile only src into dist, rewriting relative
+TypeScript imports to JavaScript. Type checking still covers sources, tests and
+scripts without emitting files. Native start and the production image now use
+dist/main.js; Docker compiles it in a separate build stage. Generated output is
+excluded from Git and the Docker build context.
+
+Format, lint, strict type checking and the JavaScript build pass under Node
+22.22.1. An isolated snapshot of the staged commit also compiles successfully.
+Its generated JavaScript starts and exits cleanly on SIGTERM under Node 24.22.0
+in an existing local Docker image, with no TypeScript sources mounted and no
+network access. All five runtime files are emitted; tests and scripts are not.
+
+The staged snapshot's socket suite passes 34 of 36 tests in that image. The same
+two existing configuration regressions remain: whitespace in endpoint lists and
+missing invalid-endpoint rejection. Native yarn check passes its static checks,
+then fails these two tests and 28 socket tests because loopback listen is denied
+by the execution sandbox. A fresh production image build remains unverified due
+to the previously observed Docker credential-helper failure. No live Tor request,
+deployment, service restart or push was performed.
+
 ## October 20, 2026 — independent Docker checks and production build
 
 The Dockerfile now shares dependency installation between an explicit `check`

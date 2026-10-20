@@ -62,6 +62,7 @@ For native execution, use Node 22.18+ and an existing Tor SOCKS service:
 ```sh
 nvm use
 corepack yarn install --immutable
+corepack yarn build
 corepack yarn start
 ```
 
@@ -86,7 +87,7 @@ before starting Node; changing the environment afterward does not reload config.
 | `TOR_SOCKS_ADDRS` | `127.0.0.1:9050` | Tor SOCKS endpoints, comma-separated (1–16) |
 
 Copy `.env.example` to `.env` for Compose. Native Node loads it only with
-`node --env-file=.env src/main.ts`.
+`node --env-file=.env dist/main.js` after building.
 
 Each new connection takes the next internal SOCKS identity and Tor endpoint.
 There are sixteen identities per endpoint, renewed on a staggered five-minute
@@ -160,8 +161,11 @@ corepack yarn check
 corepack yarn build
 ```
 
-Node runs TypeScript directly; `build` checks types. Tests use loopback sockets,
-fake SOCKS endpoints and a fake Docker CLI without public traffic.
+`build` compiles only `src/` to JavaScript in `dist/` using `tsconfig.build.json`.
+`start` and the production Docker image run `dist/main.js`; build before starting.
+Development (`yarn dev`), tests and benchmark scripts still run TypeScript directly.
+`typecheck` checks sources, tests and scripts without emitting files. Tests use
+loopback sockets, fake SOCKS endpoints and a fake Docker CLI without public traffic.
 
 `docker build --target check .` runs the checks in Linux. The default Docker build
 produces the production image independently, without running checks. Before
