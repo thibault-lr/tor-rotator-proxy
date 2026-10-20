@@ -54,8 +54,7 @@ test(
     );
     const first = await app.tunnel();
     const excess = await app.connect();
-    const refusal = (await readToEnd(excess)).toString();
-    assert.match(refusal, /^HTTP\/1\.1 503 /);
+    assert.equal((await readToEnd(excess)).length, 0);
     assert.equal(app.backendSockets.size, 1);
     first.end();
     await readToEnd(first);
@@ -134,7 +133,7 @@ test(
       await accepted;
       const stopped = app.proxy.stop();
       client.write(`${requestLine}\r\nHost: origin.invalid\r\n\r\n`);
-      assert.match((await readToEnd(client)).toString(), /^HTTP\/1\.1 503 /);
+      assert.equal((await readToEnd(client)).length, 0);
       await stopped;
       await waitForIdle(app);
       assert.equal(calls, 0);

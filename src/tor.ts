@@ -4,10 +4,8 @@ import { createConnection, type Socket } from "node:net";
 
 import { SocksClient } from "socks";
 
-import type { Target } from "./types.ts";
-
+export type Target = { host: string; port: number };
 export type Credentials = { username: string; password: string };
-export class ConnectTimeoutError extends Error {}
 
 export function createSessionRotation(
   count: number,
@@ -62,9 +60,7 @@ export async function openTorConnection(
     noDelay: true,
   });
   socket.on("error", () => {});
-  let timedOut = false;
   const deadline = setTimeout(() => {
-    timedOut = true;
     socket.destroy(new Error("Tor connection deadline exceeded"));
   }, timeoutMs);
 
@@ -103,12 +99,7 @@ export async function openTorConnection(
     return connected.socket;
   } catch (cause) {
     socket.destroy();
-    if (timedOut) {
-      throw new ConnectTimeoutError("Tor connection deadline exceeded", {
-        cause,
-      });
-    }
-    throw new Error("Tor SOCKS connection failed", { cause });
+    throw cause;
   } finally {
     clearTimeout(deadline);
     socket.off("data", requireAuthentication);

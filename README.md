@@ -79,9 +79,8 @@ corepack yarn start
 
 ## Configuration and rotation
 
-`src/config.ts` exports a constant object checked with `satisfies Config`.
-`Config` lives in `src/types.ts` and is the input type of the proxy; startup
-passes the object directly:
+`src/config.ts` exports the configuration object. Its type is inferred with
+`typeof config`; startup passes the object directly:
 
 ```ts
 import { config } from "./config.ts";
@@ -112,9 +111,10 @@ Fixed transport limits live in `src/config.ts`: 256 clients, 30 seconds to conne
 These bounds protect stuck connections without adding configuration knobs.
 There is no request tracing, admin API or monitoring service.
 
-The former `X-Tor-Session` and `X-Radar-*` controls are ignored and are not returned
-in proxy responses. They are stripped from plain HTTP requests before forwarding.
-Clients that used them should now use only the standard proxy setting.
+Application headers pass through unchanged, except for connection-specific
+HTTP headers and proxy authentication. Invalid requests, admission refusals and
+upstream failures close the client connection without a custom HTTP error body
+or status. Origin HTTP responses, including errors, are forwarded unchanged.
 
 ## Benchmark
 
@@ -160,7 +160,6 @@ src/
   config.ts     Two environment inputs and fixed transport limits
   server.ts     Server events, admission, cancellation and shutdown
   proxy.ts      HTTP/CONNECT validation, forwarding and stream deadlines
-  types.ts      Shared configuration and endpoint types
   tor.ts        Internal rotation and authenticated SOCKS connections
 script/
   benchmark.ts  Docker instance comparison and resource measurements

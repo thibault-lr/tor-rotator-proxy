@@ -7,7 +7,6 @@ import type { TestContext } from "node:test";
 
 import { config as defaultConfig } from "../src/config.ts";
 import { createProxy } from "../src/server.ts";
-import type { Config } from "../src/types.ts";
 
 export type Route = {
   host: string;
@@ -116,7 +115,7 @@ export async function readToEnd(socket: Socket) {
 export async function harness(
   t: TestContext,
   serve: (socket: Socket) => Promise<void>,
-  overrides: Partial<Config> = {},
+  overrides: Partial<typeof defaultConfig> = {},
 ) {
   const backendSockets = new Set<Socket>();
   const clients = new Set<Socket>();
@@ -145,7 +144,7 @@ export async function harness(
   await once(backend, "listening");
   const address = backend.address();
   assert.ok(address && typeof address !== "string");
-  const config: Config = {
+  const config = {
     ...defaultConfig,
     proxyBind: { host: "127.0.0.1", port: 0 },
     torEndpoints: [{ host: "127.0.0.1", port: address.port }],
@@ -232,7 +231,7 @@ export function connectionCount(server: Server) {
   );
 }
 
-export function loadConfig(env: NodeJS.ProcessEnv = {}): Config {
+export function loadConfig(env: NodeJS.ProcessEnv = {}): typeof defaultConfig {
   const result = spawnSync(
     process.execPath,
     [

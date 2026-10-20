@@ -1,19 +1,18 @@
 import {
-  STATUS_CODES,
   type IncomingHttpHeaders,
   request,
-  ServerResponse,
+  type ServerResponse,
   type IncomingMessage,
 } from "node:http";
 import type { Socket } from "node:net";
-import { pipeline, type Duplex } from "node:stream";
+import { pipeline } from "node:stream";
 
+import type { config } from "./config.ts";
 import {
-  ConnectTimeoutError,
+  type Target,
   openTorConnection,
   type createSessionRotation,
 } from "./tor.ts";
-import type { Config, Target } from "./types.ts";
 
 type RequestTarget = Target & { authority: string; path: string };
 type TorConnection = {
@@ -24,7 +23,7 @@ type TorConnection = {
 };
 
 type RequestContext = {
-  config: Config;
+  config: typeof config;
   nextSession: ReturnType<typeof createSessionRotation>;
   signal: AbortSignal;
   close: () => void;
@@ -35,7 +34,7 @@ export async function handleHttpRequest(
   response: ServerResponse,
   context: RequestContext,
 ) {
-  const opened = await connectToTarget(incoming, response, context);
+  const opened = await connectToTarget(incoming, context);
   if (!opened) {
     return;
   }
@@ -71,7 +70,7 @@ export async function handleConnectRequest(
   client.resume();
   let opened: TorConnection | undefined;
   try {
-    opened = await connectToTarget(incoming, client, context);
+    opened = await connectToTarget(incoming, context);
   } finally {
     client.pause();
     client.off("data", collect);
@@ -89,58 +88,20 @@ export async function handleConnectRequest(
   }
 }
 
-export function validateRequest(
-  incoming: IncomingMessage,
-  output: ServerResponse | Socket,
-) {
-  let destination: RequestTarget;
-  try {
-    destination = parseRequestTarget(incoming);
-  } catch {
-    respond(
-      output,
-      400,
-      "Expected CONNECT host:port or an absolute http:// URL\n",
-    );
-    return;
-  }
-  if (incoming.method !== "CONNECT" && incoming.headers.upgrade !== undefined) {
-    respond(output, 501, "Use CONNECT for protocol upgrades\n");
-    return;
-  }
-  return destination;
-}
-
 async function connectToTarget(
   incoming: IncomingMessage,
-  output: ServerResponse | Socket,
   context: RequestContext,
 ): Promise<TorConnection | undefined> {
   const { config, nextSession, signal, close } = context;
-  const destination = validateRequest(incoming, output);
-  if (!destination) {
-    return;
-  }
+  const destination = parseRequestTarget(incoming);
   const session = nextSession();
-  let upstream: Socket;
-  try {
-    upstream = await openTorConnection(
-      config.torEndpoints[session.id % config.torEndpoints.length]!,
-      destination,
-      session,
-      config.connectTimeoutMs,
-      signal,
-    );
-  } catch (cause) {
-    if (!signal.aborted) {
-      respond(
-        output,
-        cause instanceof ConnectTimeoutError ? 504 : 502,
-        "Tor could not open the destination stream\n",
-      );
-    }
-    return;
-  }
+  const upstream = await openTorConnection(
+    config.torEndpoints[session.id % config.torEndpoints.length]!,
+    destination,
+    session,
+    config.connectTimeoutMs,
+    signal,
+  );
   if (signal.aborted || upstream.destroyed) {
     upstream.destroy();
     return;
@@ -161,7 +122,7 @@ function parseRequestTarget(incoming: IncomingMessage): RequestTarget {
   const value = incoming.url ?? "";
   const tunnel = incoming.method === "CONNECT";
   const absolute = /^http:\/\/([^/?#]+)([^#]*)$/.exec(value);
-  if (!tunnel && !absolute) {
+  if (!tunnel && (!absolute || incoming.headers.upgrade !== undefined)) {
     throw new Error("Expected an absolute HTTP URL");
   }
   const authority = tunnel ? value : absolute![1]!;
@@ -203,16 +164,6 @@ function forwardHttpRequest(
 ) {
   const { upstream, destination } = opened;
   const headers = stripHopHeaders(incoming.headers);
-  // Old proxy controls and correlation headers must not reach the origin.
-  for (const name of Object.keys(headers)) {
-    if (
-      /^(x-radar-|x-tor-)/.test(name) ||
-      name === "traceparent" ||
-      name === "tracestate"
-    ) {
-      delete headers[name];
-    }
-  }
   headers.host = destination.authority;
   headers.connection = "close";
   const outgoing = request({
@@ -235,11 +186,12 @@ function forwardHttpRequest(
   });
   outgoing.once("error", () => {
     upstream.destroy();
-    respond(response, 502, "Upstream response failed\n");
+    response.destroy();
   });
   incoming.pipe(outgoing);
 }
 
+// Connection-specific headers and proxy credentials must not reach the next HTTP peer.
 function stripHopHeaders(original: IncomingHttpHeaders): IncomingHttpHeaders {
   const headers = { ...original };
   const connection = original.connection;
@@ -261,39 +213,6 @@ function stripHopHeaders(original: IncomingHttpHeaders): IncomingHttpHeaders {
     delete headers[name.trim().toLowerCase()];
   }
   return headers;
-}
-
-export function respond(
-  output: ServerResponse | Duplex,
-  status: number,
-  body: string,
-  extra: Record<string, string> = {},
-) {
-  if (output.destroyed || output.writableEnded) {
-    return;
-  }
-  const headers = {
-    "content-type": "text/plain; charset=utf-8",
-    "content-length": Buffer.byteLength(body),
-    "cache-control": "no-store",
-    "x-content-type-options": "nosniff",
-    connection: "close",
-    ...extra,
-  };
-  if (output instanceof ServerResponse) {
-    if (output.headersSent) {
-      return output.destroy();
-    }
-    output.writeHead(status, headers);
-    output.end(body);
-  } else {
-    const lines = Object.entries(headers).map(
-      ([name, value]) => `${name}: ${value}`,
-    );
-    output.end(
-      `HTTP/1.1 ${status} ${STATUS_CODES[status]}\r\n${lines.join("\r\n")}\r\n\r\n${body}`,
-    );
-  }
 }
 
 export function setConnectionTimeouts(

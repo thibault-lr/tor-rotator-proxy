@@ -1,21 +1,13 @@
-import {
-  createServer,
-  ServerResponse,
-  type IncomingMessage,
-  type Server,
-} from "node:http";
+import { createServer, type Server } from "node:http";
 import type { Socket } from "node:net";
 
 import { config as baseConfig } from "./config.ts";
 import {
   handleHttpRequest,
   handleConnectRequest,
-  validateRequest,
-  respond,
   setConnectionTimeouts,
 } from "./proxy.ts";
 import { createSessionRotation } from "./tor.ts";
-import type { Config } from "./types.ts";
 
 type ClientConnection = {
   socket: Socket;
@@ -25,14 +17,14 @@ type ClientConnection = {
 };
 
 type ProxyState = {
-  config: Config;
+  config: typeof baseConfig;
   draining: boolean;
   nextSession: ReturnType<typeof createSessionRotation>;
   connections: Map<Socket, ClientConnection>;
   pendingRequests: Set<Promise<void>>;
 };
 
-export function createProxy(config: Config = baseConfig) {
+export function createProxy(config = baseConfig) {
   const state: ProxyState = {
     config,
     draining: false,
@@ -58,41 +50,29 @@ export function createProxy(config: Config = baseConfig) {
   server.maxRequestsPerSocket = 1;
 
   server.on("connection", (socket) => acceptConnection(socket, state));
-  server.on("clientError", (cause, socket) => {
-    if ("code" in cause && cause.code === "ERR_HTTP_REQUEST_TIMEOUT") {
-      socket.destroy();
-      return;
-    }
-    if (!socket.destroyed && socket.writable) {
-      respond(socket, 400, "Invalid HTTP request\n");
-    }
-  });
+  server.on("clientError", (_cause, socket) => socket.destroy());
   server.on("request", (incoming, response) => {
     response.shouldKeepAlive = false;
-    const context = startRequest(incoming, response, state);
+    const context = startRequest(incoming.socket, state);
     if (context) {
       trackRequest(
         state,
         handleHttpRequest(incoming, response, context),
-        response,
+        context.close,
       );
     }
   });
   server.on("connect", (incoming, _socket, head) => {
-    const context = startRequest(incoming, incoming.socket, state);
+    const context = startRequest(incoming.socket, state);
     if (context) {
       trackRequest(
         state,
         handleConnectRequest(incoming, head, context),
-        incoming.socket,
+        context.close,
       );
     }
   });
-  server.on("upgrade", (incoming) => {
-    if (startRequest(incoming, incoming.socket, state)) {
-      validateRequest(incoming, incoming.socket);
-    }
-  });
+  server.on("upgrade", (_incoming, socket) => socket.destroy());
   return { server, stop: () => stopProxy(server, state) };
 }
 
@@ -101,10 +81,7 @@ function acceptConnection(socket: Socket, state: ProxyState) {
   socket.on("error", () => {});
   socket.setNoDelay(true);
   if (state.draining || connections.size >= config.maxConnections) {
-    respond(socket, 503, "Proxy admission limit reached\n", {
-      "retry-after": "1",
-    });
-    setTimeout(() => socket.destroy(), 50).unref();
+    socket.destroy();
     return;
   }
 
@@ -139,44 +116,29 @@ function closeConnection(connection: ClientConnection) {
 function trackRequest(
   state: ProxyState,
   work: Promise<void>,
-  output: ServerResponse | Socket,
+  close: () => void,
 ) {
   const { pendingRequests } = state;
   const handled = work
-    .catch(() => {
-      console.error("Unexpected proxy request failure");
-      if (output instanceof ServerResponse) {
-        respond(output, 502, "Upstream response failed\n");
-      } else {
-        output.destroy();
-      }
-    })
+    .catch(close)
     .finally(() => pendingRequests.delete(handled));
   pendingRequests.add(handled);
 }
 
-function startRequest(
-  incoming: IncomingMessage,
-  output: ServerResponse | Socket,
-  state: ProxyState,
-) {
+function startRequest(socket: Socket, state: ProxyState) {
   const { connections } = state;
-  const connection = connections.get(incoming.socket);
+  const connection = connections.get(socket);
   if (!connection) {
     return;
   }
   clearTimeout(connection.headerDeadline);
 
   // CONNECT bypasses Node's HTTP request limit, including after a pipelined GET.
-  if (connection.requestStarted) {
+  if (state.draining || connection.requestStarted) {
     closeConnection(connection);
     return;
   }
   connection.requestStarted = true;
-  if (state.draining) {
-    respond(output, 503, "Proxy is shutting down\n");
-    return;
-  }
   return {
     config: state.config,
     nextSession: state.nextSession,

@@ -1,5 +1,3 @@
-import type { Config } from "./types.ts";
-
 const mapToEndpoint = (endpoint: string) => {
   const url = new URL(`tcp://${endpoint}`);
 
@@ -25,4 +23,4 @@ export const config = {
   maxStreamMs: 600_000,
   headerTimeoutMs: 10_000,
   shutdownGraceMs: 10_000,
-} satisfies Config;
+};

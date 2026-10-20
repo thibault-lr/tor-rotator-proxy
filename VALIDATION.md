@@ -1,5 +1,30 @@
 # Standalone extraction validation
 
+## October 21, 2026 — minimal request failure handling
+
+Removed custom HTTP error responses, timeout error classification and the
+duplicated Config type. Configuration consumers infer typeof config; Target
+lives with the Tor connection function and src/types.ts is removed. Request
+failures now close the client connection through one server catch boundary.
+SOCKS cleanup, cancellation, deadlines and destination validation remain.
+
+Removed project-specific and tracing-header filtering. Application headers now
+pass through; stripHopHeaders retains only connection/proxy header filtering
+and has a short explanation. Updated failure assertions to expect closure and
+added a regression proving a failed SOCKS or malformed upstream HTTP response
+does not prevent the next HTTP request from succeeding. Origin HTTP statuses
+and bodies remain forwarded. Runtime source is 144 lines shorter.
+
+Format, lint, strict type checking and JavaScript build pass under Node 22.22.1.
+The isolated Node 24.22.0 Docker suite passes 36 of 38 tests. Only the known
+configuration regressions fail: endpoint whitespace and invalid-endpoint
+rejection. Native yarn check passes static checks but fails those tests and
+30 socket tests because loopback listen is denied by the execution sandbox.
+Compiled JavaScript starts, closes two invalid requests without crashing and
+exits cleanly on SIGTERM with no TypeScript sources mounted. Removed the stale
+generated dist/types.js. No fresh production image build, public Tor request,
+deployment or push was performed.
+
 ## October 21, 2026 — stream deadlines beside proxy handling
 
 Moved setConnectionTimeouts unchanged into src/proxy.ts and removed

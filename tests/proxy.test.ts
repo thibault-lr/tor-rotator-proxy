@@ -121,7 +121,7 @@ test(
     });
     const client = await app.connect();
     client.write(
-      "POST http://origin.invalid:8080/a/../path?x=1 HTTP/1.1\r\nHost: wrong.invalid\r\nAuthorization: Bearer origin-token\r\nProxy-Authorization: obsolete\r\nX-Radar-Request-Id: test:http\r\nX-Radar-Traceparent: 00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb-01\r\nTraceparent: 00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb-01\r\nTracestate: vendor=private\r\nX-Tor-Session: 1\r\nConnection: close, X-Private\r\nConnection: X-Second\r\nX-Private: hidden\r\nX-Second: hidden\r\nTE: trailers\r\nContent-Length: 7\r\n\r\npayload",
+      "POST http://origin.invalid:8080/a/../path?x=1 HTTP/1.1\r\nHost: wrong.invalid\r\nAuthorization: Bearer origin-token\r\nProxy-Authorization: obsolete\r\nX-Request-Id: test:http\r\nTraceparent: 00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb-01\r\nTracestate: vendor=private\r\nConnection: close, X-Private\r\nConnection: X-Second\r\nX-Private: hidden\r\nX-Second: hidden\r\nTE: trailers\r\nContent-Length: 7\r\n\r\npayload",
     );
     const result = (await readToEnd(client)).toString();
     assert.match(result, /^HTTP\/1\.1 200 /);
@@ -133,24 +133,20 @@ test(
     assert.match(originHeaders, /^POST \/a\/\.\.\/path\?x=1 HTTP\/1\.1/);
     assert.equal(header(originHeaders, "host"), "origin.invalid:8080");
     assert.equal(header(originHeaders, "authorization"), "Bearer origin-token");
-    for (const name of [
-      "proxy-authorization",
-      "x-radar-request-id",
-      "x-radar-traceparent",
-      "traceparent",
-      "tracestate",
-      "x-tor-session",
-      "x-private",
-      "x-second",
-      "te",
-    ]) {
+    assert.equal(header(originHeaders, "x-request-id"), "test:http");
+    assert.equal(
+      header(originHeaders, "traceparent"),
+      "00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb-01",
+    );
+    assert.equal(header(originHeaders, "tracestate"), "vendor=private");
+    for (const name of ["proxy-authorization", "x-private", "x-second", "te"]) {
       assert.equal(header(originHeaders, name), undefined);
     }
   },
 );
 
 test(
-  "legacy session headers cannot control rotation or add diagnostic headers",
+  "successive tunnels rotate through the internal sessions",
   { timeout: 6_000 },
   async (t) => {
     const routes: Route[] = [];
@@ -159,10 +155,7 @@ test(
       await untilClosed(socket);
     });
     for (let i = 0; i < 3; i++) {
-      const client = await app.tunnel(
-        undefined,
-        "X-Tor-Session: 1\r\nX-Radar-Request-Id: old-client\r\n",
-      );
+      const client = await app.tunnel();
       client.end();
       await readToEnd(client);
     }
@@ -194,14 +187,14 @@ test(
     ]) {
       const client = await app.connect();
       client.write("CONNECT " + target + " HTTP/1.1\r\nHost: test\r\n\r\n");
-      assert.match((await readToEnd(client)).toString(), /^HTTP\/1\.1 400 /);
+      assert.equal((await readToEnd(client)).length, 0);
     }
     assert.equal(calls, 0);
   },
 );
 
 test(
-  "SOCKS refusal returns a standard error without diagnostic metadata",
+  "SOCKS refusal closes the client connection",
   { timeout: 6_000 },
   async (t) => {
     const app = await harness(t, async (socket) => {
@@ -209,17 +202,47 @@ test(
     });
     const client = await app.connect();
     client.write(
-      "CONNECT origin.invalid:443 HTTP/1.1\r\nHost: origin.invalid:443\r\nX-Radar-Request-Id: invalid request id\r\n\r\n",
+      "CONNECT origin.invalid:443 HTTP/1.1\r\nHost: origin.invalid:443\r\n\r\n",
     );
-    const response = await readHeaders(client);
-    assert.match(response, /^HTTP\/1\.1 502 /);
-    assert.doesNotMatch(response, /x-tor-|x-radar-/i);
-    await readToEnd(client);
+    assert.equal((await readToEnd(client)).length, 0);
   },
 );
 
 test(
-  "SOCKS deadlines return 504 and authentication downgrade is rejected",
+  "a failed HTTP request closes its connection and the next request succeeds",
+  { timeout: 6_000 },
+  async (t) => {
+    for (const failure of ["socks", "http"]) {
+      let calls = 0;
+      const app = await harness(t, async (socket) => {
+        const first = calls++ === 0;
+        await handshake(socket, first && failure === "socks" ? 5 : 0);
+        if (first && failure === "socks") {
+          return;
+        }
+        await readHeaders(socket);
+        socket.end(
+          first
+            ? "Invalid HTTP response\r\n\r\n"
+            : "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok",
+        );
+        await untilClosed(socket);
+      });
+      const failed = await app.connect();
+      failed.write("GET http://origin.invalid/ HTTP/1.1\r\nHost: test\r\n\r\n");
+      assert.equal((await readToEnd(failed)).length, 0);
+      const next = await app.connect();
+      next.write("GET http://origin.invalid/ HTTP/1.1\r\nHost: test\r\n\r\n");
+      const response = (await readToEnd(next)).toString();
+      assert.match(response, /^HTTP\/1\.1 200 /);
+      assert.ok(response.endsWith("ok"));
+      assert.equal(calls, 2);
+    }
+  },
+);
+
+test(
+  "SOCKS deadlines and authentication downgrade close the connection",
   { timeout: 6_000 },
   async (t) => {
     for (const downgrade of [false, true]) {
@@ -240,15 +263,8 @@ test(
         { connectTimeoutMs: 100 },
       );
       const client = await app.connect();
-      client.write(
-        "CONNECT origin.invalid:443 HTTP/1.1\r\nHost: test\r\nX-Radar-Request-Id: test:failure\r\n\r\n",
-      );
-      const response = await readHeaders(client);
-      assert.match(
-        response,
-        new RegExp("^HTTP/1.1 " + (downgrade ? 502 : 504) + " "),
-      );
-      await readToEnd(client);
+      client.write("CONNECT origin.invalid:443 HTTP/1.1\r\nHost: test\r\n\r\n");
+      assert.equal((await readToEnd(client)).length, 0);
     }
   },
 );
@@ -299,7 +315,7 @@ test(
     client.write(
       "GET http://origin.invalid/ HTTP/1.1\r\nHost: origin.invalid\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n\r\n",
     );
-    assert.match((await readToEnd(client)).toString(), /^HTTP\/1\.1 501 /);
+    assert.equal((await readToEnd(client)).length, 0);
     assert.equal(calls, 0);
   },
 );

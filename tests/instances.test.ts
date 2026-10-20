@@ -3,13 +3,7 @@ import { once } from "node:events";
 import { createServer } from "node:net";
 import { test } from "node:test";
 
-import {
-  handshake,
-  harness,
-  readHeaders,
-  readToEnd,
-  untilClosed,
-} from "./helpers.ts";
+import { handshake, harness, readToEnd, untilClosed } from "./helpers.ts";
 
 test(
   "connections rotate between Tor endpoints without a fallback after refusal",
@@ -60,8 +54,7 @@ test(
     client.write(
       "CONNECT never-resolve-locally.invalid:443 HTTP/1.1\r\nHost: test\r\n\r\n",
     );
-    assert.match(await readHeaders(client), /^HTTP\/1\.1 502 /);
-    await readToEnd(client);
+    assert.equal((await readToEnd(client)).length, 0);
     assert.deepEqual(visits, [0, 1, 0]);
   },
 );
