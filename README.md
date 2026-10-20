@@ -159,10 +159,9 @@ src/
   main.ts       Start and stop the server
   config.ts     Two environment inputs and fixed transport limits
   server.ts     Server events, admission, cancellation and shutdown
-  proxy.ts      Request validation and HTTP/CONNECT forwarding
+  proxy.ts      HTTP/CONNECT validation, forwarding and stream deadlines
   types.ts      Shared configuration and endpoint types
   tor.ts        Internal rotation and authenticated SOCKS connections
-  timeouts.ts   Idle and lifetime deadlines
 script/
   benchmark.ts  Docker instance comparison and resource measurements
   ip-probe.ts   One HTTPS exit-IP request through the proxy

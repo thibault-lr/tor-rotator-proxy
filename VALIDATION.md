@@ -1,5 +1,20 @@
 # Standalone extraction validation
 
+## October 21, 2026 — stream deadlines beside proxy handling
+
+Moved setConnectionTimeouts unchanged into src/proxy.ts and removed
+src/timeouts.ts. Both upstream and client sockets use the same helper;
+server.ts imports it from proxy.ts. Updated the file map and engineering rule.
+
+Format, lint, strict type checking and JavaScript build pass under Node 22.22.1.
+The complete isolated Docker socket suite passes 35 of 37 tests, including
+blocked HTTP/CONNECT idle deadlines and maximum lifetime under ongoing traffic.
+Only the two known configuration regressions fail. Native yarn check still
+hits the sandbox's loopback restriction in addition to those configuration
+failures. Verified the moved function is identical and removed the obsolete
+generated dist/timeouts.js. No fresh Docker image build, public Tor request,
+deployment or push was performed for this move.
+
 ## October 21, 2026 — server and proxy separation
 
 Moved createProxy and connection lifecycle management into src/server.ts. It

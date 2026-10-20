@@ -12,8 +12,8 @@ import {
   handleConnectRequest,
   validateRequest,
   respond,
+  setConnectionTimeouts,
 } from "./proxy.ts";
-import { setConnectionTimeouts } from "./timeouts.ts";
 import { createSessionRotation } from "./tor.ts";
 import type { Config } from "./types.ts";
 
