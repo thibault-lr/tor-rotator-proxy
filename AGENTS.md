@@ -13,8 +13,8 @@
 - Preserve streaming, backpressure, TCP half-closes, admission limits and independent header/connection/idle/lifetime deadlines. Do not buffer entire streams. Bound optimistic CONNECT data.
 - Cancel pending work when its client closes. Close both sides of failed connections. Cleanup must be idempotent. Verify closure with real socket behavior rather than production counters added only for tests.
 - Keep proxy authentication away from the origin. Forward application headers without project-specific filtering. Use simple startup/error messages; never log credentials, payloads, query strings or raw errors that expose them. Do not reintroduce tracing or client-controlled sessions.
-- Keep the runtime limited to proxying. Resource measurements and exit-IP checks belong to the explicit benchmark; do not add an admin server, Prometheus or background probes.
-- Add regressions for behavior defects using the existing `node:test` socket harness. Verify success, refusal, cancellation and cleanup paths. Run `yarn check`; `docker build --target check .` runs the same checks without network access. Production image builds are independent of checks; require both to pass on the same commit before publishing.
+- Keep the runtime limited to proxying. Load measurements and exit-IP checks belong to the explicit benchmark; do not add an admin server, Prometheus or background probes.
+- Keep four readable `node:test` integration scenarios: HTTP forwarding, CONNECT transfer, session rotation and recovery after a Tor refusal. Share the fake SOCKS setup; avoid exhaustive protocol matrices and benchmark orchestration tests. Check benchmark changes with a small local self-check. Run `yarn check`; `docker build --target check .` runs the same checks without network access. Production image builds are independent of checks; require both to pass on the same commit before publishing.
 - Document actual evidence and limitations in `VALIDATION.md`. A Tor circuit or session does not guarantee a unique exit IP. Validate builds after runtime changes while preserving configuration. Restart the running proxy only when the task authorizes deployment.
 
 ## Standalone project

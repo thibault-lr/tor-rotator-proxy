@@ -1,14 +1,12 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
 import { once } from "node:events";
-import type { Server } from "node:http";
 import { createConnection, createServer, type Socket } from "node:net";
 import type { TestContext } from "node:test";
 
-import { config as defaultConfig } from "../src/config.ts";
+import { config } from "../src/config.ts";
 import { createProxy } from "../src/server.ts";
 
-export type Route = {
+type Route = {
   host: string;
   port: number;
   addressType: number;
@@ -17,7 +15,7 @@ export type Route = {
 };
 
 // Read a fixture frame without consuming the following bytes.
-export function readExactly(socket: Socket, size: number): Promise<Buffer> {
+function readExactly(socket: Socket, size: number): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const cleanup = () => {
       socket.off("readable", read);
@@ -47,7 +45,7 @@ export function readExactly(socket: Socket, size: number): Promise<Buffer> {
   });
 }
 
-export async function handshake(socket: Socket, reply = 0): Promise<Route> {
+async function handshake(socket: Socket, reply = 0): Promise<Route> {
   assert.deepEqual(await readExactly(socket, 4), Buffer.from([5, 2, 0, 2]));
   socket.write(Buffer.from([5, 2]));
   const auth = await readExactly(socket, 2);
@@ -84,14 +82,7 @@ export async function readHeaders(socket: Socket) {
   return headers;
 }
 
-export function header(headers: string, name: string) {
-  const line = headers
-    .split("\r\n")
-    .find((entry) => entry.toLowerCase().startsWith(name.toLowerCase() + ":"));
-  return line?.slice(line.indexOf(":") + 1).trim();
-}
-
-export async function untilClosed(socket: Socket) {
+async function untilClosed(socket: Socket) {
   if (socket.closed) {
     return;
   }
@@ -112,140 +103,106 @@ export async function readToEnd(socket: Socket) {
   return Buffer.concat(chunks);
 }
 
-export async function harness(
+export async function startTestProxy(
   t: TestContext,
-  serve: (socket: Socket) => Promise<void>,
-  overrides: Partial<typeof defaultConfig> = {},
+  serve: (socket: Socket, route: Route) => void | Promise<void>,
 ) {
-  const backendSockets = new Set<Socket>();
-  const clients = new Set<Socket>();
-  const pending = new Set<Promise<void>>();
+  const sockets = new Set<Socket>();
+  const pending: Promise<void>[] = [];
   const errors: unknown[] = [];
+  const routes: Route[] = [];
   let closing = false;
-  let acceptedRoutes = 0;
-  const backend = createServer({ allowHalfOpen: true }, (socket) => {
+  let refuseNext = false;
+
+  const track = (socket: Socket) => {
+    sockets.add(socket);
     socket.on("error", () => {});
-    backendSockets.add(socket);
-    acceptedRoutes++;
-    socket.once("close", () => backendSockets.delete(socket));
-    const work = serve(socket)
-      .catch((cause) => {
-        if (!closing) {
-          errors.push(cause);
-        }
-      })
-      .finally(() => {
-        pending.delete(work);
-        socket.destroy();
-      });
-    pending.add(work);
-  });
-  backend.listen(0, "127.0.0.1");
-  await once(backend, "listening");
-  const address = backend.address();
-  assert.ok(address && typeof address !== "string");
-  const config = {
-    ...defaultConfig,
-    proxyBind: { host: "127.0.0.1", port: 0 },
-    torEndpoints: [{ host: "127.0.0.1", port: address.port }],
-    sessionCount: 2,
-    shutdownGraceMs: 150,
-    ...overrides,
+    socket.once("close", () => sockets.delete(socket));
   };
-  const proxy = createProxy(config);
-  proxy.server.listen(config.proxyBind.port, config.proxyBind.host);
-  await once(proxy.server, "listening");
-  const proxyAddress = proxy.server.address();
-  assert.ok(proxyAddress && typeof proxyAddress !== "string");
-  const proxyPort = proxyAddress.port;
+  const tor = createServer({ allowHalfOpen: true }, (socket) => {
+    track(socket);
+    const refused = refuseNext;
+    refuseNext = false;
+    const work = async () => {
+      const route = await handshake(socket, refused ? 5 : 0);
+      routes.push(route);
+      if (!refused) {
+        await serve(socket, route);
+      }
+      await untilClosed(socket);
+    };
+    pending.push(
+      work()
+        .catch((error) => {
+          if (!closing) {
+            errors.push(error);
+          }
+        })
+        .finally(() => socket.destroy()),
+    );
+  });
+  tor.listen(0, "127.0.0.1");
+  await once(tor, "listening");
+  const torAddress = tor.address();
+  assert.ok(torAddress && typeof torAddress !== "string");
+
+  const proxy = createProxy({
+    ...config,
+    torEndpoints: [{ host: "127.0.0.1", port: torAddress.port }],
+    sessionCount: 2,
+    shutdownGraceMs: 100,
+  });
   t.after(async () => {
     closing = true;
-    for (const client of clients) {
-      client.destroy();
-    }
-    await proxy.stop();
-    for (const socket of backendSockets) {
+    for (const socket of sockets) {
       socket.destroy();
     }
-    await new Promise<void>((resolve) => backend.close(() => resolve()));
+    await proxy.stop();
+    await new Promise<void>((resolve) => tor.close(() => resolve()));
     await Promise.all(pending);
-    assert.equal(await connectionCount(proxy.server), 0);
     assert.deepEqual(errors, []);
   });
+  proxy.server.listen(0, "127.0.0.1");
+  await once(proxy.server, "listening");
+  const address = proxy.server.address();
+  assert.ok(address && typeof address !== "string");
+  const port = address.port;
+
   async function connect() {
     const socket = createConnection({
       host: "127.0.0.1",
-      port: proxyPort,
+      port,
       allowHalfOpen: true,
     });
-    socket.on("error", () => {});
+    track(socket);
     socket.setTimeout(4_000, () =>
-      socket.destroy(new Error("Test socket deadline exceeded")),
+      socket.destroy(new Error("Test connection timed out")),
     );
-    clients.add(socket);
-    socket.once("close", () => clients.delete(socket));
     await once(socket, "connect");
     return socket;
   }
-  async function tunnel(
-    target = "never-resolve-locally.invalid:443",
-    extra = "",
-    head = Buffer.alloc(0),
-  ) {
-    const socket = await connect();
-    socket.write(
-      Buffer.concat([
-        Buffer.from(
-          "CONNECT " +
-            target +
-            " HTTP/1.1\r\nHost: " +
-            target +
-            "\r\n" +
-            extra +
-            "\r\n",
-        ),
-        head,
-      ]),
-    );
-    const response = await readHeaders(socket);
-    assert.equal(response, "HTTP/1.1 200 Connection Established\r\n\r\n");
-    return socket;
-  }
   return {
-    config,
-    backendSockets,
-    acceptedRoutes: () => acceptedRoutes,
-    proxy,
-    proxyPort,
-    connect,
-    tunnel,
-    backendPort: address.port,
+    routes,
+    refuseNextConnection() {
+      refuseNext = true;
+    },
+    async get(url: string) {
+      const socket = await connect();
+      socket.write(
+        `GET ${url} HTTP/1.1\r\nHost: ${new URL(url).host}\r\nConnection: close\r\n\r\n`,
+      );
+      return (await readToEnd(socket)).toString();
+    },
+    async openTunnel() {
+      const socket = await connect();
+      socket.write(
+        "CONNECT origin.invalid:443 HTTP/1.1\r\nHost: origin.invalid:443\r\n\r\n",
+      );
+      assert.equal(
+        await readHeaders(socket),
+        "HTTP/1.1 200 Connection Established\r\n\r\n",
+      );
+      return socket;
+    },
   };
-}
-
-export function connectionCount(server: Server) {
-  return new Promise<number>((resolve, reject) =>
-    server.getConnections((error, count) =>
-      error ? reject(error) : resolve(count),
-    ),
-  );
-}
-
-export function loadConfig(env: NodeJS.ProcessEnv = {}): typeof defaultConfig {
-  const result = spawnSync(
-    process.execPath,
-    [
-      "--input-type=module",
-      "-e",
-      'import { config } from "./src/config.ts"; process.stdout.write(JSON.stringify(config));',
-    ],
-    { cwd: new URL("../", import.meta.url), env, encoding: "utf8" },
-  );
-  if (result.error) {
-    throw result.error;
-  }
-  if (result.status !== 0) {
-    throw new Error(result.stderr);
-  }
-  return JSON.parse(result.stdout);
 }

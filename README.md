@@ -118,39 +118,27 @@ or status. Origin HTTP responses, including errors, are forwarded unchanged.
 
 ## Benchmark
 
-With Docker running:
+Start the proxy and wait for Tor to finish bootstrapping, then run:
 
 ```sh
-corepack yarn benchmark --instances 1,2,4 --duration 60s --requestsPerSecond 1
+corepack yarn benchmark --duration 60s --requestsPerSecond 1
 ```
 
-Each case starts the requested number of **separate Tor containers** and one
-proxy, waits up to five minutes for Tor bootstrap, then requests
-`https://check.torproject.org/api/ip` through fresh proxy tunnels. Cases run
-sequentially. The output shows:
+The script sends requests to `https://check.torproject.org/api/ip` through the
+running proxy at `http://127.0.0.1:5566`. Use `--proxy http://127.0.0.1:5567`
+for another local proxy. It does not create containers or change services.
 
-- Tor instance count.
-- Mean and peak sampled CPU and memory for Tor plus the proxy.
-- Distinct exit IPs, successful/failed requests and resource sample count.
+The JSON output reports sent, successful and failed requests, distinct exit IPs,
+and mean/P50/P95/P99 latency in milliseconds. Latencies include CONNECT, TLS and
+the complete response, and use successful Tor IP responses only. With no successes,
+latencies are `null`. Different sessions can share the same exit IP.
 
-Only three options exist: unique instance counts from 1 to 16, a duration from
-5s to 3600s, and a request rate above zero up to 5 per second. At most eight
-requests run at once, with a fixed 30-second timeout. A 403 or 429 stops new
-requests and later cases; requests already in flight finish. No retry or redirect
-is performed. The old `benchmark:load` command has been removed.
-
-Results are saved in `.run/benchmarks/tor-bench-*/results.json`, including IPs,
-request outcomes, unsent requests, container identities and resource samples.
-Missing measurements remain unknown. Each case uses its own Compose project,
-ephemeral loopback port and temporary Tor volumes. It cleans up only those
-resources, including on Ctrl+C; reports and built images remain. Existing Radar
-services and volumes are not used.
-
-Resources come from `docker stats` during requests and draining, after bootstrap.
-CPU uses Docker's percentage convention (100% is one core); memory is the CLI's
-working-set estimate. Peaks can miss spikes between samples. Measurements exclude
-bootstrap, the benchmark client and Docker VM overhead. IP counts depend on the
-Tor network and the test duration; they are not a uniqueness guarantee.
+Requests start at the requested rate without waiting for earlier responses.
+`sentRps` measures starts during the sending window; `completedRps` includes the
+time spent waiting for the last responses. A request times out after 30 seconds.
+A 403 or 429 stops new requests; Ctrl+C cancels pending requests and prints the
+partial result. There are no retries. To compare Tor instance counts, change your
+running setup and rerun the same command.
 
 ## Files and development
 
@@ -162,7 +150,7 @@ src/
   proxy.ts      HTTP/CONNECT validation, forwarding and stream deadlines
   tor.ts        Internal rotation and authenticated SOCKS connections
 script/
-  benchmark.ts  Docker instance comparison and resource measurements
+  benchmark.ts  Request rate and latency summary for a running proxy
   ip-probe.ts   One HTTPS exit-IP request through the proxy
 ```
 
@@ -177,7 +165,9 @@ corepack yarn build
 `start` and the production Docker image run `dist/main.js`; build before starting.
 Development (`yarn dev`), tests and benchmark scripts still run TypeScript directly.
 `typecheck` checks sources, tests and scripts without emitting files. Tests use
-loopback sockets, fake SOCKS endpoints and a fake Docker CLI without public traffic.
+four integration scenarios with a local fake SOCKS server: HTTP, CONNECT, session
+rotation and recovery after refusal. No public traffic or running Tor is needed.
+The suite intentionally omits exhaustive timeout/concurrency and benchmark tests.
 
 `docker build --target check .` runs the checks in Linux. The default Docker build
 produces the production image independently, without running checks. Before

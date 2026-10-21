@@ -1,5 +1,36 @@
 # Standalone extraction validation
 
+## October 21, 2026 — four smoke tests and a standalone load script
+
+Reduced the permanent suite to four integration tests: HTTP forwarding, CONNECT
+transfer, SOCKS credential rotation and recovery after a Tor refusal. They use
+the real proxy/server and one shared local fake SOCKS fixture. Removed the
+protocol/lifecycle matrices and benchmark tests, including the configuration
+and probe test files already deleted in the working tree. Runtime sources are
+unchanged. The earlier endpoint-whitespace and invalid-endpoint configuration
+issues are not fixed; their tests are no longer in this deliberately small suite.
+
+The benchmark now targets an existing local proxy and accepts duration and
+requests-per-second settings. It prints success/failure counts, achieved rates,
+distinct IPs and successful-response mean/P50/P95/P99 latency. Measurement includes
+CONNECT, TLS and full response reading. Removed container creation, resource
+sampling and persisted reports. The existing bounded HTTPS probe is reused.
+
+Format, lint, strict type checking and the JavaScript build pass under Node
+22.22.1. Native yarn check reaches the four socket tests, then hits the sandbox's
+loopback listen restriction. All four pass under Node 24.22.0 in the existing
+local Docker image with external networking disabled and the repository mounted
+read-only.
+
+An additional temporary HTTPS fixture verified the actual benchmark CLI at
+20 requests/second for one second: 20 sent and successful, with delayed responses
+reflected in mean/P95/P99. Mixed failures, no successful samples, HTTP 429 stop,
+SIGINT cancellation and invalid rate input also pass. The fixture used a local
+certificate trusted only by the child process; no public host was contacted.
+No fresh image build, live Tor load, deployment or push was performed. Timeout,
+concurrency, header-filtering and configuration edge cases no longer have
+exhaustive automated coverage.
+
 ## October 21, 2026 — trust internal rotation inputs
 
 Removed the session-count/TTL guard and its invalid-argument test. The runtime
