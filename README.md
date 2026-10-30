@@ -116,29 +116,47 @@ HTTP headers and proxy authentication. Invalid requests, admission refusals and
 upstream failures close the client connection without a custom HTTP error body
 or status. Origin HTTP responses, including errors, are forwarded unchanged.
 
-## Benchmark
+## Probe and benchmark
 
-Start the proxy and wait for Tor to finish bootstrapping, then run:
+Start the proxy and wait for Tor first. The probe needs Bash and curl 8.4+;
+there is no Node.js or jq requirement for the probe alone:
+
+```sh
+bash script/ip-probe.sh
+bash script/ip-probe.sh http://127.0.0.1:5567
+```
+
+It prints the endpoint's JSON body, followed by the HTTP and CONNECT status codes
+on one line. It fails on HTTP errors. The benchmark also checks `IsTor` and the IP
+address before counting a response as successful.
+
+The benchmark needs Node 22.18+ and uses the same Bash probe:
 
 ```sh
 corepack yarn benchmark --duration 60s --requestsPerSecond 1
 ```
 
-The script sends requests to `https://check.torproject.org/api/ip` through the
-running proxy at `http://127.0.0.1:5566`. Use `--proxy http://127.0.0.1:5567`
-for another local proxy. It does not create containers or change services.
+Use `--proxy http://127.0.0.1:5567` for another proxy. The script does not create
+containers or change services. Each probe opens a fresh connection to
+`https://check.torproject.org/api/ip`, with a thirty-second deadline, a bounded
+response and no retries or redirects. TLS verification stays enabled. curl's
+configuration file and `NO_PROXY` cannot silently bypass the requested proxy.
 
-The JSON output reports sent, successful and failed requests, distinct exit IPs,
-and mean/P50/P95/P99 latency in milliseconds. Latencies include CONNECT, TLS and
-the complete response, and use successful Tor IP responses only. With no successes,
-latencies are `null`. Different sessions can share the same exit IP.
+The JSON summary reports sent, successful and failed requests, distinct exit IPs,
+and mean/P50/P95/P99 latency in milliseconds. Latency covers the probe process,
+CONNECT, TLS and the full response; only successful Tor IP responses contribute.
+With no successes, latencies are `null`. One curl process per request adds local
+overhead, so this is a modest-rate Tor check, not a proxy throughput measurement.
 
-Requests start at the requested rate without waiting for earlier responses.
+Requests start at the requested rate without waiting for previous responses.
 `sentRps` measures starts during the sending window; `completedRps` includes the
-time spent waiting for the last responses. A request times out after 30 seconds.
-A 403 or 429 stops new requests; Ctrl+C cancels pending requests and prints the
-partial result. There are no retries. To compare Tor instance counts, change your
-running setup and rerun the same command.
+time waiting for the final responses. A 403 or 429 stops new requests. Ctrl+C
+cancels pending probes and prints the partial result.
+
+The probe uses [curl](https://curl.se/docs/manpage.html) for CONNECT, TLS and
+transfer deadlines. The benchmark stays in TypeScript because scheduling,
+cancellation and percentile calculations are clearer there than in shell jobs
+and text-processing pipelines. Neither script is included in the runtime image.
 
 ## Files and development
 
@@ -151,7 +169,7 @@ src/
   tor.ts        Internal rotation and authenticated SOCKS connections
 script/
   benchmark.ts  Request rate and latency summary for a running proxy
-  ip-probe.ts   One HTTPS exit-IP request through the proxy
+  ip-probe.sh   One HTTPS exit-IP request using curl
 ```
 
 ```sh
@@ -163,7 +181,8 @@ corepack yarn build
 
 `build` compiles only `src/` to JavaScript in `dist/` using `tsconfig.build.json`.
 `start` and the production Docker image run `dist/main.js`; build before starting.
-Development (`yarn dev`), tests and benchmark scripts still run TypeScript directly.
+Development (`yarn dev`), tests and the benchmark still run TypeScript directly.
+The IP probe uses Bash and curl; lint includes a Bash syntax check.
 `typecheck` checks sources, tests and scripts without emitting files. Tests use
 four integration scenarios with a local fake SOCKS server: HTTP, CONNECT, session
 rotation and recovery after refusal. No public traffic or running Tor is needed.

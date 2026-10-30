@@ -14,7 +14,8 @@
     "check": "yarn lint && yarn format:check && yarn typecheck && yarn test",
     "build": "tsc -p tsconfig.build.json",
     "benchmark": "node script/benchmark.ts",
-    "lint": "oxlint --config .oxlintrc.json --deny-warnings src tests script",
+    "ip-probe": "bash script/ip-probe.sh",
+    "lint": "bash -n script/ip-probe.sh && oxlint --config .oxlintrc.json --deny-warnings src tests script",
     "lint:fix": "yarn lint --fix",
     "format": "oxfmt --config .oxfmtrc.json --write .",
     "format:check": "oxfmt --config .oxfmtrc.json --check ."

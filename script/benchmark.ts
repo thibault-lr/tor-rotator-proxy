@@ -1,7 +1,43 @@
+import { execFile } from "node:child_process";
+import { isIP } from "node:net";
 import { setTimeout as delay } from "node:timers/promises";
+import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
-import { probeIp, type IpResult } from "./ip-probe.ts";
+type IpResult = { ip: string | null; statusCode: number };
+const probeScript = fileURLToPath(new URL("./ip-probe.sh", import.meta.url));
+
+// shortcut: process startup affects latency; use a load tool for high-rate measurements.
+function probeIp(proxy: string, signal: AbortSignal): Promise<IpResult> {
+  return new Promise((resolve) => {
+    execFile(
+      "bash",
+      [probeScript, proxy],
+      { signal, timeout: 31_000, maxBuffer: 2_048 },
+      (error, stdout) => {
+        const lines = stdout.trimEnd().split("\n");
+        const [httpStatus, connectStatus] = lines.pop()!.split(" ").map(Number);
+        const statusCode = httpStatus || connectStatus || 0;
+        let ip: string | null = null;
+        if (!error && statusCode === 200) {
+          try {
+            const value = JSON.parse(lines.join("\n"));
+            if (
+              value.IsTor === true &&
+              typeof value.IP === "string" &&
+              isIP(value.IP)
+            ) {
+              ip = value.IP;
+            }
+          } catch {
+            // Invalid responses count as failures, without logging their contents.
+          }
+        }
+        resolve({ ip, statusCode });
+      },
+    );
+  });
+}
 
 async function main() {
   const { values } = parseArgs({
@@ -58,7 +94,7 @@ async function main() {
           ...result,
           latencyMs: performance.now() - requestStarted,
         });
-        refused ||= result.status_code === 403 || result.status_code === 429;
+        refused ||= result.statusCode === 403 || result.statusCode === 429;
         pending.delete(work);
       });
       pending.add(work);
@@ -82,7 +118,7 @@ async function main() {
   }
 
   const elapsedMs = performance.now() - started;
-  const successes = results.filter((result) => result.error === null);
+  const successes = results.filter((result) => result.ip !== null);
   const latencies = successes
     .map((result) => result.latencyMs)
     .sort((a, b) => a - b);
