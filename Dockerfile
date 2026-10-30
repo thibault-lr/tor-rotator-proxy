@@ -23,8 +23,9 @@ RUN --network=none --mount=type=cache,target=/root/.yarn/berry/cache yarn worksp
 FROM node:24-bookworm-slim
 WORKDIR /app
 ENV NODE_ENV=production
+LABEL org.opencontainers.image.licenses="MIT"
 COPY --from=production-dependencies /app/node_modules ./node_modules
-COPY package.json ./
+COPY package.json LICENSE ./
 COPY --from=build /app/dist ./dist
 USER 10001:10001
 EXPOSE 5566

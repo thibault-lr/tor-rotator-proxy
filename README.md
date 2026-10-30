@@ -296,3 +296,8 @@ docker compose build
 If Docker reports storage or daemon errors before running the build, fix the
 Docker installation first. Do not remove volumes to troubleshoot a build.
 Actual evidence and remaining limitations are recorded in [VALIDATION.md](VALIDATION.md).
+
+## License
+
+This project's code is licensed under the [MIT License](LICENSE).
+Third-party components, including Tor and Node.js, retain their own licenses.

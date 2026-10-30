@@ -1,5 +1,22 @@
 # Validation
 
+## October 30, 2026 — MIT license
+
+Added the MIT license at the owner's request, with copyright attributed to
+Thibault Leroy using the repository's existing Git author identity. package.json
+now declares MIT, and README links to LICENSE. Third-party licenses are unchanged.
+
+The proxy image includes /app/LICENSE and an MIT OCI license label. The Tor image
+includes the project license at /usr/share/doc/tor-rotator/LICENSE alongside its
+existing third-party license notices. Both embedded copies were compared byte
+for byte with the repository file; proxy package metadata and the OCI label were
+also verified.
+
+Native format, lint, check (four tests) and build pass. The Docker check target
+and both production images build successfully for Linux ARM64. No runtime code
+changed; AMD64 builds and live Tor measurements were not repeated for this
+licensing change. No service was restarted and no image or Git commit was pushed.
+
 ## October 30, 2026 — Docker builds, live Tor and resource benchmark
 
 Docker Desktop is available again. Checks and production builds pass for both
