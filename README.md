@@ -179,6 +179,29 @@ Requests start at the requested rate without waiting for previous responses.
 time waiting for the final responses. A 403 or 429 stops new requests. Ctrl+C
 cancels pending probes and prints the partial result.
 
+To include Docker resources, supply the names of the running proxy and Tor
+containers. Find them with `docker compose ps`:
+
+```sh
+corepack yarn benchmark --duration 60s --requestsPerSecond 1 \
+  --containers tor-rotator-proxy-1,tor-rotator-tor-1 > benchmark.json
+```
+
+The optional `docker` summary reports mean/peak CPU, mean/peak memory in MiB,
+received/sent network MiB and peak process/thread count per container. Sampling
+uses `docker stats` during sending and draining, with a baseline before requests
+and a final sample afterward. Its setup and final sample are excluded from
+request throughput and latency. `complete: false` means samples are missing;
+missing measurements are never reported as zero. No containers are created or
+restarted. Without `--containers`, Docker is not required.
+
+CPU is Docker's percentage (100% is one logical CPU). Memory follows the Docker
+CLI's cache-adjusted accounting. Mean/peak values are sampled, so short spikes
+can be missed. Network deltas use rounded Docker counters and include Tor's own
+traffic as well as the proxy workload; they are not HTTP payload sizes. The
+client process and Docker VM overhead are outside these container measurements.
+See [Docker statistics](https://docs.docker.com/reference/cli/docker/container/stats/).
+
 The probe uses [curl](https://curl.se/docs/manpage.html) for CONNECT, TLS and
 transfer deadlines. The benchmark stays in TypeScript because scheduling,
 cancellation and percentile calculations are clearer there than in shell jobs
@@ -213,6 +236,7 @@ src/
 script/
   ip-probe.sh   One exit-IP request using curl
   benchmark.ts  Request scheduling and summary statistics
+  docker-stats.ts  Optional container resource measurements
 ```
 
 Four integration scenarios use real local sockets and a shared fake SOCKS server:

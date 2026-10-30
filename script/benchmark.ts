@@ -4,6 +4,8 @@ import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
+import { startDockerStats } from "./docker-stats.ts";
+
 type IpResult = { ip: string | null; statusCode: number };
 const probeScript = fileURLToPath(new URL("./ip-probe.sh", import.meta.url));
 
@@ -45,6 +47,7 @@ async function main() {
       proxy: { type: "string", default: "http://127.0.0.1:5566" },
       duration: { type: "string", default: "60s" },
       requestsPerSecond: { type: "string", default: "1" },
+      containers: { type: "string" },
     },
   });
   const durationMs = /^\d+(?:\.\d+)?s$/.test(values.duration)
@@ -66,10 +69,15 @@ async function main() {
   const stop = () => controller.abort();
   process.once("SIGINT", stop);
   process.once("SIGTERM", stop);
+  const stopStats = values.containers
+    ? await startDockerStats(values.containers.split(","))
+    : undefined;
+  let docker: Awaited<ReturnType<NonNullable<typeof stopStats>>> | undefined;
   const results: (IpResult & { latencyMs: number })[] = [];
   const pending = new Set<Promise<void>>();
   const started = performance.now();
   let rateWindowMs = durationMs;
+  let elapsedMs = 0;
   let refused = false;
   try {
     for (
@@ -113,11 +121,12 @@ async function main() {
   } finally {
     rateWindowMs = performance.now() - started;
     await Promise.all(pending);
+    elapsedMs = performance.now() - started;
+    docker = await stopStats?.();
     process.off("SIGINT", stop);
     process.off("SIGTERM", stop);
   }
 
-  const elapsedMs = performance.now() - started;
   const successes = results.filter((result) => result.ip !== null);
   const latencies = successes
     .map((result) => result.latencyMs)
@@ -151,6 +160,7 @@ async function main() {
           p99: percentile(0.99),
         },
         distinctIps: new Set(successes.map((result) => result.ip)).size,
+        docker,
       },
       null,
       2,
@@ -158,7 +168,9 @@ async function main() {
   );
   process.exitCode = controller.signal.aborted
     ? 130
-    : successes.length !== results.length || !results.length
+    : successes.length !== results.length ||
+        !results.length ||
+        docker?.complete === false
       ? 1
       : 0;
 }
