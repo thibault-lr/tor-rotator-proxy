@@ -207,6 +207,22 @@ transfer deadlines. The benchmark stays in TypeScript because scheduling,
 cancellation and percentile calculations are clearer there than in shell jobs
 and text-processing pipelines. Neither script is included in the runtime image.
 
+### Measured Docker run
+
+On October 30, 2026, a 60-second run at 1 request/second completed **59/60 requests**
+successfully and observed **20 distinct Tor exit IPs**. P50/P95 successful latency
+was **1.28 / 4.59 seconds**. One request failed; no retries were used.
+
+| Container | Mean / peak CPU |   Mean / peak RAM |
+| --------- | --------------: | ----------------: |
+| Proxy     |   0.97% / 3.19% | 29.28 / 30.39 MiB |
+| Tor       |  1.49% / 10.36% | 15.90 / 16.17 MiB |
+
+Measured on an Apple M2 with Docker's Linux ARM64 VM; CPU 100% means one logical
+CPU. These sampled values describe a low-rate test, not maximum capacity or a
+unique-IP guarantee. Read the [full report and reproduction steps](BENCHMARK.md)
+for network/process metrics, environment, limitations and [raw data](benchmarks/2026-10-30.json).
+
 ## Development
 
 Native execution needs Node 22.18+ and an existing Tor SOCKS service:

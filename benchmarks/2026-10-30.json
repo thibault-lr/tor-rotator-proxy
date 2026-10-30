@@ -1,0 +1,57 @@
+{
+  "requestedRps": 1,
+  "sentRps": 1,
+  "completedRps": 0.77,
+  "elapsedSeconds": 77.56,
+  "sent": 60,
+  "succeeded": 59,
+  "failed": 1,
+  "interrupted": false,
+  "stoppedOnRefusal": false,
+  "latencyMs": {
+    "mean": 1905.31,
+    "p50": 1282.29,
+    "p95": 4589.08,
+    "p99": 23560.85
+  },
+  "distinctIps": 20,
+  "docker": {
+    "complete": true,
+    "samples": 40,
+    "sampledSeconds": 79.8,
+    "containers": [
+      {
+        "name": "tor-rotator-validation-wbn4no-tor-rotator-1",
+        "cpuPercent": {
+          "mean": 0.97,
+          "peak": 3.19
+        },
+        "memoryMiB": {
+          "mean": 29.28,
+          "peak": 30.39
+        },
+        "networkMiB": {
+          "received": 0.46,
+          "sent": 0.46
+        },
+        "pidsPeak": 11
+      },
+      {
+        "name": "tor-rotator-validation-wbn4no-tor-1",
+        "cpuPercent": {
+          "mean": 1.49,
+          "peak": 10.36
+        },
+        "memoryMiB": {
+          "mean": 15.9,
+          "peak": 16.17
+        },
+        "networkMiB": {
+          "received": 0.67,
+          "sent": 0.65
+        },
+        "pidsPeak": 7
+      }
+    ]
+  }
+}
