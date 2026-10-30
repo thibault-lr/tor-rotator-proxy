@@ -1,0 +1,32 @@
+services:
+  tor:
+    image: ${TOR_ROTATOR_IMAGE:?Set TOR_ROTATOR_IMAGE}-tor:${TOR_ROTATOR_VERSION:?Set TOR_ROTATOR_VERSION}
+    restart: unless-stopped
+    networks: [tor]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    read_only: true
+    volumes:
+      - tor-data:/var/lib/tor
+    stop_grace_period: 20s
+
+  tor-rotator:
+    image: ${TOR_ROTATOR_IMAGE:?Set TOR_ROTATOR_IMAGE}:${TOR_ROTATOR_VERSION:?Set TOR_ROTATOR_VERSION}
+    restart: unless-stopped
+    depends_on:
+      tor:
+        condition: service_started
+    networks: [default, tor]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    read_only: true
+    environment:
+      PROXY_BIND: 0.0.0.0:5566
+      TOR_SOCKS_ADDRS: tor:9050
+    stop_grace_period: 20s
+
+networks:
+  tor:
+
+volumes:
+  tor-data:

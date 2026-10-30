@@ -1,120 +1,146 @@
 # Tor Rotator
 
-HTTP proxy that sends requests through Tor and rotates SOCKS identities
-internally. Clients use their usual HTTP proxy setting; no SDK or special headers.
+A reusable HTTP proxy for scrapers. Clients use their normal proxy setting;
+Tor Rotator sends traffic through Tor and rotates SOCKS identities internally.
 HTTPS uses CONNECT, keeping TLS between the client and the destination.
-The only runtime dependency is `socks`.
 
-## Use it
+The deployment has two containers: the Node.js proxy and Tor. The proxy image
+contains only the compiled runtime and its one production dependency, `socks`.
+There is no SDK, admin API, background IP probe or client-controlled session.
 
-Run these commands from this directory with Docker Desktop running and available
-disk space. The optional `.env` file is not required for the defaults.
+## Try it locally
 
-```
-# Native proxy settings. Compose fixes these for its internal network.
-PROXY_BIND=127.0.0.1:5566
-TOR_SOCKS_ADDRS=127.0.0.1:9050
-
-# Docker host port only; useful when another proxy already uses 5566.
-HOST_PROXY_PORT=5566
-```
-
-## Run
+With Docker running, build and start from this directory:
 
 ```sh
 docker compose up --build -d
 docker compose logs -f tor
 ```
 
-Wait for `Bootstrapped 100%`, then press Ctrl+C to stop following logs (the
-containers keep running). Test the proxy:
+Wait for `Bootstrapped 100%`, then press Ctrl+C to leave the log stream.
+The containers keep running. Check the proxy:
 
 ```sh
 curl --proxy http://127.0.0.1:5566 --noproxy '' https://check.torproject.org/api/ip
 ```
 
-Use any API URL in the same way. Its status, response headers and body come back
-through the proxy. There are no automatic retries, redirects or direct fallback.
+The local Compose file publishes only the proxy, on loopback. To choose another
+host port, set `HOST_PROXY_PORT=5567` in `.env` or before the Compose command.
+The existing project name and `tor-data` volume are preserved.
+`docker compose down` stops the services without deleting Tor state.
 
-### If Docker fails to start or build
+## Use it in a scraper project
 
-Check the configuration and build separately:
+After publishing a release, copy `compose.images.yaml` into the scraper project.
+Set these values in that project's `.env`, using your actual repository and a
+published version. These image names are placeholders, not existing releases:
+
+```dotenv
+TOR_ROTATOR_IMAGE=ghcr.io/your-account/tor-rotator
+TOR_ROTATOR_VERSION=0.2.0
+```
+
+Include the file from your application's `compose.yaml` (Compose 2.20.3+):
+
+```yaml
+include:
+  - compose.images.yaml
+
+services:
+  scraper:
+    build: .
+    environment:
+      HTTP_PROXY: http://tor-rotator:5566
+      HTTPS_PROXY: http://tor-rotator:5566
+    depends_on:
+      - tor-rotator
+```
+
+Start the proxy services and wait for Tor before starting a scrape:
 
 ```sh
-docker compose config --quiet
-docker compose build
+docker compose up -d tor tor-rotator
+docker compose logs -f tor
+# After Bootstrapped 100%, leave the log stream with Ctrl+C.
+docker compose run --rm scraper
 ```
 
-An `input/output error` mentioning `/var/lib/docker/buildkit/containerdmeta.db`
-or `/var/lib/docker/overlay2` indicates a Docker storage failure. It occurs before
-the application starts; changing proxy settings will not resolve it. Check free
-space on the host and Docker Desktop's disk usage. Free space from known,
-unneeded files, then restart Docker Desktop when interrupting other containers is
-acceptable and retry the build. If the error persists, investigate Docker
-Desktop diagnostics before resetting its storage.
+The reusable Compose file publishes no host ports. The scraper reaches
+`http://tor-rotator:5566` on the application's default network. Tor has a separate
+network shared only with the proxy; its SOCKS port is not on the scraper network.
+Both images run without root and keep their root filesystem read-only.
+The Tor network retains Internet access for connecting to Tor relays.
 
-Do not use a factory reset, `docker system prune --volumes` or
-`docker compose down --volumes` as a routine fix: they can delete persistent data,
-including Tor state. The image build remains unverified while Docker storage is
-failing; see [VALIDATION.md](VALIDATION.md).
+`depends_on` orders container startup; it does not wait for Tor bootstrap.
+Requests can fail until Tor is ready. Client timeouts, retries, cookies and request
+rates belong to the scraper. There is no retry or direct fallback in the proxy.
 
-The default Compose project keeps the `tor-rotator` name, port and Tor state
-volume. To run alongside Radar, use another project and port:
+Not every HTTP client honors proxy environment variables. Use the client's own
+proxy option when necessary. For example, Python's standard library:
 
-```sh
-HOST_PROXY_PORT=5567 docker compose -p tor-rotator-standalone up --build -d
+```python
+import urllib.request
+
+proxy = "http://tor-rotator:5566"
+client = urllib.request.build_opener(
+    urllib.request.ProxyHandler({"http": proxy, "https": proxy})
+)
+with client.open("https://example.com", timeout=30) as response:
+    print(response.read().decode())
 ```
 
-Only the proxy is published, on loopback. The SOCKS port stays internal.
-`docker compose down` stops the service without deleting its Tor state.
+Or an existing Playwright project:
 
-For native execution, use Node 22.18+ and an existing Tor SOCKS service:
+```js
+import { chromium } from "playwright";
 
-```sh
-nvm use
-corepack yarn install --immutable
-corepack yarn build
-corepack yarn start
+const browser = await chromium.launch({
+  proxy: { server: "http://tor-rotator:5566" },
+});
+try {
+  const page = await browser.newPage();
+  await page.goto("https://example.com");
+  console.log(await page.title());
+} finally {
+  await browser.close();
+}
 ```
 
-## Configuration and rotation
+Use `http://127.0.0.1:5566` instead when the scraper runs on your host against the
+local Compose deployment. See the official [Compose networking guide](https://docs.docker.com/compose/how-tos/networking/)
+and [Playwright proxy options](https://playwright.dev/docs/network#http-proxy).
 
-`src/config.ts` exports the configuration object. Its type is inferred with
-`typeof config`; startup passes the object directly:
-
-```ts
-import { config } from "./config.ts";
-import { createProxy } from "./server.ts";
-
-const proxy = createProxy(config);
-```
-
-The two endpoint settings below are read once when the module loads. Set them
-before starting Node; changing the environment afterward does not reload config.
-
-| Variable          | Default          | Purpose                                     |
-| ----------------- | ---------------- | ------------------------------------------- |
-| `PROXY_BIND`      | `127.0.0.1:5566` | Listening address                           |
-| `TOR_SOCKS_ADDRS` | `127.0.0.1:9050` | Tor SOCKS endpoints, comma-separated (1–16) |
-
-Copy `.env.example` to `.env` for Compose. Native Node loads it only with
-`node --env-file=.env dist/main.js` after building.
+## Rotation and configuration
 
 Each new connection takes the next internal SOCKS identity and Tor endpoint.
 There are sixteen identities per endpoint, renewed on a staggered five-minute
-cycle. Destination DNS goes through Tor. An existing HTTPS tunnel keeps its
-connection; fresh requests on that tunnel do not rotate it.
-**Different identities or Tor instances can still share the same exit IP.**
+cycle. Destination DNS goes through Tor. **A new session does not guarantee a
+new exit IP.** An existing HTTPS tunnel keeps its connection, so several requests
+on the same tunnel can use the same exit. Rotation is per connection, not per
+page or request made inside a reused tunnel.
 
-Fixed transport limits live in `src/config.ts`: 256 clients, 30 seconds to connect,
+Application headers pass through, except for connection-specific HTTP headers
+and proxy authentication. Origin statuses, headers and bodies are forwarded,
+including errors such as 429. Invalid requests, admission refusals and upstream
+failures close the client connection without a custom HTTP error response.
+
+`src/config.ts` exports the configuration object; its type is inferred with
+`typeof config`. These settings are read once at startup:
+
+| Variable          | Native default   | Purpose                             |
+| ----------------- | ---------------- | ----------------------------------- |
+| `PROXY_BIND`      | `127.0.0.1:5566` | Listening address                   |
+| `TOR_SOCKS_ADDRS` | `127.0.0.1:9050` | Comma-separated Tor SOCKS endpoints |
+
+Use valid `host:port` values, with brackets around IPv6 hosts. Configuration is
+operator-controlled; the parser does not perform exhaustive validation. Compose
+sets these addresses for its own network. `HOST_PROXY_PORT` affects only the
+local Compose host mapping.
+
+Fixed limits remain in `src/config.ts`: 256 clients, 30 seconds to connect,
 60 seconds idle, ten minutes per stream and ten seconds for headers or shutdown.
-These bounds protect stuck connections without adding configuration knobs.
-There is no request tracing, admin API or monitoring service.
-
-Application headers pass through unchanged, except for connection-specific
-HTTP headers and proxy authentication. Invalid requests, admission refusals and
-upstream failures close the client connection without a custom HTTP error body
-or status. Origin HTTP responses, including errors, are forwarded unchanged.
+HTTPS connections longer than ten minutes must reconnect. The proxy has no
+client authentication; keep access limited to your local or application network.
 
 ## Probe and benchmark
 
@@ -158,37 +184,72 @@ transfer deadlines. The benchmark stays in TypeScript because scheduling,
 cancellation and percentile calculations are clearer there than in shell jobs
 and text-processing pipelines. Neither script is included in the runtime image.
 
-## Files and development
+## Development
 
-```text
-src/
-  main.ts       Start and stop the server
-  config.ts     Two environment inputs and fixed transport limits
-  server.ts     Server events, admission, cancellation and shutdown
-  proxy.ts      HTTP/CONNECT validation, forwarding and stream deadlines
-  tor.ts        Internal rotation and authenticated SOCKS connections
-script/
-  benchmark.ts  Request rate and latency summary for a running proxy
-  ip-probe.sh   One HTTPS exit-IP request using curl
-```
+Native execution needs Node 22.18+ and an existing Tor SOCKS service:
 
 ```sh
+nvm use
+corepack yarn install --immutable
 corepack yarn format
 corepack yarn lint
 corepack yarn check
 corepack yarn build
+corepack yarn start
 ```
 
-`build` compiles only `src/` to JavaScript in `dist/` using `tsconfig.build.json`.
-`start` and the production Docker image run `dist/main.js`; build before starting.
-Development (`yarn dev`), tests and the benchmark still run TypeScript directly.
-The IP probe uses Bash and curl; lint includes a Bash syntax check.
-`typecheck` checks sources, tests and scripts without emitting files. Tests use
-four integration scenarios with a local fake SOCKS server: HTTP, CONNECT, session
-rotation and recovery after refusal. No public traffic or running Tor is needed.
-The suite intentionally omits exhaustive timeout/concurrency and benchmark tests.
+Native Node loads `.env` only when explicitly passed, for example
+`node --env-file=.env dist/main.js`. `yarn dev` runs the TypeScript entry point
+with file watching. `build` compiles only `src/` to `dist/`; `typecheck` also checks
+tests and the benchmark. `lint` includes a Bash syntax check.
 
-`docker build --target check .` runs the checks in Linux. The default Docker build
-produces the production image independently, without running checks. Before
-publishing, require both checks and the production build to pass on the same commit.
-See [VALIDATION.md](VALIDATION.md) for the checks actually performed.
+```text
+src/
+  main.ts       Startup and process signals
+  config.ts     Endpoint settings and fixed limits
+  server.ts     Server events, admission, cancellation and shutdown
+  proxy.ts      HTTP/CONNECT forwarding, validation and stream deadlines
+  tor.ts        Session rotation and authenticated SOCKS connections
+script/
+  ip-probe.sh   One exit-IP request using curl
+  benchmark.ts  Request scheduling and summary statistics
+```
+
+Four integration scenarios use real local sockets and a shared fake SOCKS server:
+HTTP forwarding, CONNECT transfer, session rotation and recovery after refusal.
+They need neither Tor nor public traffic. The HTTP scenario also checks remote
+DNS, raw-path preservation, application headers and proxy-auth removal.
+The suite intentionally omits exhaustive protocol matrices and benchmark tests.
+
+## Publish Docker images
+
+The GitHub Actions workflow checks pull requests and pushes to `main`. It runs
+`docker build --target check .` and builds both production images for Linux AMD64
+and ARM64. The check stage runs without network access after dependencies have
+been installed. Production builds remain independent of that stage.
+
+Publishing a GitHub release such as `v0.2.0` reruns these checks and builds on the
+release commit. Only after success does it publish these images with
+`GITHUB_TOKEN`:
+
+```text
+ghcr.io/<owner>/<repository>:0.2.0
+ghcr.io/<owner>/<repository>-tor:0.2.0
+```
+
+The workflow uses version tags rather than `latest`. Allow Actions to publish
+packages and set the GHCR packages to public if consumers should pull without
+logging in. Until a release is published, use the local source Compose file.
+See [GitHub's image publishing guide](https://docs.github.com/en/actions/tutorials/publish-packages/publish-docker-images).
+
+For local image verification:
+
+```sh
+docker compose config --quiet
+docker build --target check .
+docker compose build
+```
+
+If Docker reports storage or daemon errors before running the build, fix the
+Docker installation first. Do not remove volumes to troubleshoot a build.
+Actual evidence and remaining limitations are recorded in [VALIDATION.md](VALIDATION.md).
