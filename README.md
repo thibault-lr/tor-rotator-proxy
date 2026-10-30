@@ -36,7 +36,7 @@ Set these values in that project's `.env`, using your actual repository and a
 published version. These image names are placeholders, not existing releases:
 
 ```dotenv
-TOR_ROTATOR_IMAGE=ghcr.io/your-account/tor-rotator
+TOR_ROTATOR_IMAGE=your-account/tor-rotator
 TOR_ROTATOR_VERSION=0.2.0
 ```
 
@@ -253,18 +253,21 @@ and ARM64. The check stage runs without network access after dependencies have
 been installed. Production builds remain independent of that stage.
 
 Publishing a GitHub release such as `v0.2.0` reruns these checks and builds on the
-release commit. Only after success does it publish these images with
-`GITHUB_TOKEN`:
+release commit. Only after success does it publish these images to Docker Hub:
 
 ```text
-ghcr.io/<owner>/<repository>:0.2.0
-ghcr.io/<owner>/<repository>-tor:0.2.0
+<dockerhub-account>/tor-rotator:0.2.0
+<dockerhub-account>/tor-rotator-tor:0.2.0
 ```
 
-The workflow uses version tags rather than `latest`. Allow Actions to publish
-packages and set the GHCR packages to public if consumers should pull without
-logging in. Until a release is published, use the local source Compose file.
-See [GitHub's image publishing guide](https://docs.github.com/en/actions/tutorials/publish-packages/publish-docker-images).
+Create the `tor-rotator` and `tor-rotator-tor` repositories in Docker Hub. In the
+GitHub repository settings, add the Actions variable `DOCKERHUB_USERNAME` and
+secret `DOCKERHUB_TOKEN` with write access to those repositories. Make the Docker
+Hub repositories public if consumers should pull without logging in.
+
+The workflow uses version tags rather than `latest`. Until a release is
+published, use the local source Compose file. See the official
+[Docker publishing guide](https://docs.docker.com/build/ci/github-actions/manage-tags-labels/).
 
 For local image verification:
 
