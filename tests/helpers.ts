@@ -186,10 +186,13 @@ export async function startTestProxy(
     refuseNextConnection() {
       refuseNext = true;
     },
-    async get(url: string) {
+    async get(url: string, headers: Record<string, string> = {}) {
       const socket = await connect();
+      const extraHeaders = Object.entries(headers)
+        .map(([name, value]) => `${name}: ${value}\r\n`)
+        .join("");
       socket.write(
-        `GET ${url} HTTP/1.1\r\nHost: ${new URL(url).host}\r\nConnection: close\r\n\r\n`,
+        `GET ${url} HTTP/1.1\r\nHost: ${new URL(url).host}\r\n${extraHeaders}Connection: close\r\n\r\n`,
       );
       return (await readToEnd(socket)).toString();
     },
