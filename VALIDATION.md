@@ -1,4 +1,126 @@
-# Standalone extraction validation
+# Validation
+
+## October 30, 2026 — Docker builds, live Tor and resource benchmark
+
+Docker Desktop is available again. Checks and production builds pass for both
+Linux ARM64 and Linux AMD64 on Docker Engine 25.0.3. Each `check` target runs the
+four integration scenarios, lint, formatting and type checking with networking
+disabled. Production builds remain independent of checks. The AMD64 production
+runtime also starts and stops without network access under Docker's emulation;
+physical AMD64 hardware was not used.
+
+The four permanent scenarios now include application headers and origin errors,
+a 256 KiB binary CONNECT transfer with half-close, upstream closure after client
+cancellation, SOCKS identity reuse and expiry, and recovery after Tor refusal.
+No production counters, monitoring endpoint or extra runtime dependency was
+added. Native format, lint, lint:fix, check and build pass under Node 22.22.1 and
+Yarn 4.18.1. Reordered the Bash syntax check before Oxlint so lint:fix still sends
+its --fix argument to the linter.
+
+Started the reusable image deployment in the isolated
+`tor-rotator-validation-wbn4no` project, with its own volume and networks. A
+loopback port was allocated only by a temporary test override. Tor 0.4.9.11
+reached Bootstrapped 100%. Both services ran without root and with read-only root
+filesystems. The Node runtime in the image is 24.22.2.
+
+A separate Python 3.13 client container received the expected HTTP 200 body
+from example.com and an HTTPS 200 response with IsTor=true from the Tor check
+endpoint, using its standard proxy configuration and TLS verification. One
+initial Python HTTPS attempt failed during the TLS handshake; its root cause
+was not isolated. A repeat and a later check against the final image both passed.
+The proxy was recreated only inside this task's isolated project to test the
+final built image. No pre-existing service or volume was modified.
+
+The first 10-second smoke benchmark completed 10/10 requests with nine distinct
+exit IPs. The subsequent 60-second run at one request/second completed 59/60
+successfully with 20 distinct exits. Its unsuccessful request was kept in the
+report; no retries were used. The benchmark exited with code 1 as expected for
+a failed request. CPU, memory, network and process/thread measurements completed
+with 40 Docker samples over 79.8 seconds, around the 77.56-second request/drain
+window. See [BENCHMARK.md](BENCHMARK.md) and the committed
+[raw JSON](benchmarks/2026-10-30.json) for the full results and reproduction steps.
+
+Docker measurements are optional and live only in the benchmark helper.
+Temporary local self-checks verified unit conversion, sample averages and peaks,
+network deltas, missing-container refusal, an explicit incomplete-sampling
+result, and cancellation while collecting Docker statistics. The latter also
+verified that probe child processes exited and that resource collection did not
+inflate request timing. The local HTTPS fixture still passes the probe's size
+bound, non-Tor response handling, 403/429 stop and socket cancellation checks.
+
+The release workflow now targets Docker Hub. actionlint 1.7.12 accepts it.
+Publication requires a GitHub repository, the DOCKERHUB_USERNAME Actions variable
+and DOCKERHUB_TOKEN secret, plus a release tag. These account settings and an
+actual registry push have not been exercised. No license has been selected yet.
+
+Both test services exited with code 0, without OOM termination. Their containers
+and networks were removed; the task's Tor state volume was retained. Existing
+services, Docker settings and volumes were preserved. The changes were split
+into focused local commits; no remote push or release was performed.
+
+These results establish local builds and standard HTTP/HTTPS operation, not
+maximum capacity, browser compatibility in every client, or failure-free Tor
+access. The benchmark has a failed request and an earlier TLS failure remains
+unexplained. Session isolation does not guarantee a unique exit IP.
+
+## October 28, 2026 — reusable scraper deployment
+
+Prepared a separate `compose.images.yaml` for consuming versioned images from
+scraper projects. It exposes `http://tor-rotator:5566` on the application network,
+keeps Tor on a separate network shared with the proxy, and publishes no host
+ports. The original local Compose file, Dockerfiles, Tor configuration, defaults
+and persistent-volume setup are unchanged.
+
+Added a GitHub Actions workflow to check and build the proxy and Tor images for
+Linux AMD64 and ARM64. Release publication depends on successful checks and
+production builds for that commit. Actions are pinned to upstream commit hashes.
+The workflow is prepared but has not run on GitHub; no images have been published.
+
+Replaced the 138-line TypeScript HTTPS probe with a 15-line Bash/curl script.
+The benchmark keeps scheduling, response validation and summary statistics in
+TypeScript. Together the scripts now have 184 lines instead of 271. The probe
+ignores curlrc and NO_PROXY, keeps TLS verification, bounds responses and transfer
+time, and uses a fresh connection per request. It needs curl 8.4+ and Bash; no npm
+or runtime dependency was added. Latency now includes curl process startup;
+its overhead differs from the former in-process probe.
+
+The four integration scenarios remain. The HTTP scenario additionally verifies
+remote DNS, raw-path preservation, application headers, proxy-auth removal and
+unchanged origin 429 responses. Startup uses a direct main call and a fixed
+failure message instead of logging a raw error. Endpoint parsing remains simple,
+with valid operator-supplied addresses assumed as requested.
+
+Verification on Node 22.22.1, Yarn 4.18.1 and curl 8.4.0:
+
+- Format, lint (including Bash syntax), strict type checking, all four native
+  socket integration tests and the compiled JavaScript build pass.
+- A temporary local HTTPS/CONNECT fixture exercised the actual Bash probe and
+  benchmark. At 20 requests/second for 0.4 seconds, all eight requests succeeded;
+  delayed responses overlapped and contributed to the latency summary. Non-Tor
+  responses, oversized bodies, origin 429 and proxy CONNECT 403 were accounted
+  for correctly. SIGINT produced a partial summary and closed the real sockets.
+  Only a temporary certificate was trusted through CURL_CA_BUNDLE for those
+  processes; TLS verification stayed enabled and no public host was contacted.
+- Compiled startup and SIGTERM shutdown pass. Binding an occupied port exits with
+  code 1 and only the fixed failure message.
+- Both Compose files validate with Docker Compose 2.24.5. A temporary scraper
+  Compose file using include also validates. Its rendered configuration has the
+  expected image names, no published ports and separate scraper/Tor networks.
+- actionlint 1.7.12 accepts the workflow. External ShellCheck and Pyflakes
+  integration were disabled for that check; Bash syntax is checked separately.
+- `git diff --check` passes.
+
+`docker build --target check .` and `docker compose build` were attempted but
+cannot connect to the stopped Docker daemon. Fresh images, cross-architecture
+execution, real Tor bootstrap and public exit-IP diversity remain unverified.
+No existing container was started or restarted, no live configuration or volume
+was changed, and no push or release was performed. No Git remote is configured;
+a project license has not yet been selected.
+
+The focused suite does not exhaustively test transport edge cases. Each HTTPS
+tunnel keeps its Tor connection, and different SOCKS identities can share an
+exit IP. The benchmark is a modest-rate diagnostic, not a throughput benchmark.
+Earlier entries below are historical evidence for earlier versions.
 
 ## October 21, 2026 — four smoke tests and a standalone load script
 
