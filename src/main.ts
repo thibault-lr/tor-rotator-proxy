@@ -24,9 +24,7 @@ async function main() {
   console.log("Proxy stopped");
 }
 
-(async () => {
-  await main();
-})().catch((err) => {
-  console.error(err);
-  process.exit(1);
+main().catch(() => {
+  console.error("Proxy failed");
+  process.exitCode = 1;
 });
