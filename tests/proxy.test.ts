@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
+import { once } from "node:events";
 import { test } from "node:test";
 
+import { createSessionRotation } from "../src/tor.ts";
 import { readHeaders, readToEnd, startTestProxy } from "./helpers.ts";
 
 test("forwards an HTTP request through Tor", { timeout: 5_000 }, async (t) => {
@@ -30,20 +32,30 @@ test("forwards an HTTP request through Tor", { timeout: 5_000 }, async (t) => {
 });
 
 test(
-  "transfers data through a CONNECT tunnel",
+  "streams CONNECT data and closes upstream when the client disconnects",
   { timeout: 5_000 },
   async (t) => {
+    let originClosed: Promise<unknown[]> | undefined;
     const proxy = await startTestProxy(t, (origin, route) => {
       assert.equal(route.host, "origin.invalid");
       assert.equal(route.port, 443);
+      originClosed = once(origin, "close");
       origin.pipe(origin);
     });
-    const payload = Buffer.from([0, 1, 127, 128, 255]);
+    const payload = Buffer.alloc(
+      256 * 1_024,
+      Buffer.from([0, 1, 127, 128, 255]),
+    );
 
     const tunnel = await proxy.openTunnel();
     tunnel.end(payload);
 
     assert.deepEqual(await readToEnd(tunnel), payload);
+    await originClosed;
+
+    const cancelled = await proxy.openTunnel();
+    cancelled.destroy();
+    await originClosed;
   },
 );
 
@@ -67,6 +79,12 @@ test(
     assert.notEqual(first.password, second.password);
     assert.equal(first.username, reused.username);
     assert.equal(first.password, reused.password);
+
+    const nextSession = createSessionRotation(1, 100, 0);
+    const before = nextSession(0);
+    const after = nextSession(100);
+    assert.notEqual(before.username, after.username);
+    assert.notEqual(before.password, after.password);
   },
 );
 
