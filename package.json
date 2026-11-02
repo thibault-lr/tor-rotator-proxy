@@ -1,6 +1,6 @@
 {
   "name": "tor-rotator-proxy",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "license": "MIT",
   "type": "module",
@@ -16,7 +16,7 @@
     "build": "tsc -p tsconfig.build.json",
     "benchmark": "node script/benchmark.ts",
     "ip-probe": "bash script/ip-probe.sh",
-    "lint": "bash -n script/ip-probe.sh && oxlint --config .oxlintrc.json --deny-warnings src tests script",
+    "lint": "bash -n script/ip-probe.sh && bash -n script/docker-check.sh && bash -n deploy/start.sh && oxlint --config .oxlintrc.json --deny-warnings src tests script",
     "lint:fix": "yarn lint --fix",
     "format": "oxfmt --config .oxfmtrc.json --write .",
     "format:check": "oxfmt --config .oxfmtrc.json --check ."

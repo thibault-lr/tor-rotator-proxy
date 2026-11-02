@@ -27,10 +27,12 @@ jobs:
           docker compose -f compose.images.yaml config --quiet
       - name: Check both architectures
         run: docker buildx build --platform linux/amd64,linux/arm64 --target check .
-      - name: Build production images
+      - name: Build production image
         run: |
           docker buildx build --platform linux/amd64,linux/arm64 .
-          docker buildx build --platform linux/amd64,linux/arm64 --file deploy/tor.Dockerfile .
+          docker buildx build --load --tag tor-rotator-check .
+      - name: Check container lifecycle
+        run: bash script/docker-check.sh tor-rotator-check
 
   publish:
     if: github.event_name == 'release'
@@ -46,7 +48,7 @@ jobs:
         with:
           username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Publish versioned images
+      - name: Publish versioned image
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
           DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
@@ -58,9 +60,3 @@ jobs:
             --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
             --label "org.opencontainers.image.version=${version}" \
             --tag "${image}:${version}" --push .
-          docker buildx build --platform linux/amd64,linux/arm64 \
-            --file deploy/tor.Dockerfile \
-            --label "org.opencontainers.image.source=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
-            --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
-            --label "org.opencontainers.image.version=${version}" \
-            --tag "${image}-tor:${version}" --push .
