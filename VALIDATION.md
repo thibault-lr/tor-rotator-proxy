@@ -1,5 +1,32 @@
 # Validation
 
+## November 2, 2026 — public release
+
+Published the existing 18-commit history to GitHub after checking Git integrity,
+whitespace and historical files. Gitleaks scanned all 18 commits without finding
+secrets. Native check (four tests) and build passed before the initial push.
+
+Release [v0.2.0](https://github.com/thibault-lr/tor-rotator/releases/tag/v0.2.0)
+targets commit `42e4d29331d2164fd019881fd75161a2f6a84b62`. Its
+[GitHub Actions run](https://github.com/thibault-lr/tor-rotator/actions/runs/41482466885)
+passed Compose validation, checks and production builds for Linux AMD64 and
+ARM64, then published both versioned images to Docker Hub. The reusable Compose
+file is attached to the release.
+
+Unauthenticated Docker Hub API requests confirmed both repositories are public
+and both `0.2.0` tags contain Linux AMD64 and ARM64 images:
+
+```text
+tleroy13/tor-rotator:0.2.0
+sha256:2ed69cadc061dd2ca47bbd93d420aa94f240741013f46b000c5c0eb444d8e637
+tleroy13/tor-rotator-tor:0.2.0
+sha256:d10c9c0c90d3e0264042cfbcae588f40f339c822a7d3160b0b61552fb8ec7a42
+```
+
+The README now focuses on consuming these images, proxy behavior and the measured
+benchmark. No runtime code changed. Public Tor measurements were not repeated
+for this release, and no existing proxy, live configuration or volume changed.
+
 ## October 30, 2026 — MIT license
 
 Added the MIT license at the owner's request, with copyright attributed to
