@@ -1,5 +1,16 @@
 # Validation
 
+## November 2, 2026 — package and image naming
+
+Renamed the package and Yarn workspace to `tor-rotator-proxy`. The release
+workflow now targets `<DOCKERHUB_USERNAME>/tor-rotator-proxy`; the repository's
+Actions variable is set to `leroythib0`. Dependency versions, runtime behavior,
+Compose service names and existing volumes are unchanged.
+
+Immutable Yarn installation, format, lint, check (four tests) and build pass.
+This naming change does not republish images or move the existing `v0.2.0` tag.
+The README's image references still point to the published `0.2.0` images.
+
 ## November 2, 2026 — public release
 
 Published the existing 18-commit history to GitHub after checking Git integrity,

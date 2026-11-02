@@ -464,9 +464,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"tor-rotator@workspace:.":
+"tor-rotator-proxy@workspace:.":
   version: 0.0.0-use.local
-  resolution: "tor-rotator@workspace:."
+  resolution: "tor-rotator-proxy@workspace:."
   dependencies:
     "@types/node": "npm:22.19.19"
     oxfmt: "npm:0.71.0"

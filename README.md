@@ -1,7 +1,7 @@
-# Tor Rotator
+# Tor Rotator Proxy
 
 An HTTP/HTTPS proxy for scrapers, backed by Tor. Use your client's normal proxy
-setting; Tor Rotator handles SOCKS session rotation and remote DNS internally.
+setting; Tor Rotator Proxy handles SOCKS session rotation and remote DNS internally.
 HTTPS uses CONNECT: TLS stays between your client and the destination.
 
 Runs as two containers managed by Docker Compose: [the proxy](https://hub.docker.com/r/tleroy13/tor-rotator)
