@@ -66,6 +66,9 @@ See [Docker's statistics documentation](https://docs.docker.com/reference/cli/do
 
 ## Reproduce
 
+These instructions target the two-container `v0.2.0` release. Use a checkout of
+that tag; `v0.3.0` combines both processes into one image.
+
 Build the two local images and use an isolated project. The small override
 publishes a loopback port only for the host benchmark:
 

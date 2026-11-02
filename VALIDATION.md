@@ -1,5 +1,46 @@
 # Validation
 
+## November 2, 2026 — single-container deployment
+
+Version `0.3.0` packages Node, Tor and Tini in one image. The proxy runtime and
+its dependencies are unchanged. Tor listens only on container loopback, with
+authenticated SOCKS isolation. Both services run as `debian-tor` (UID 100,
+GID 101), matching the previous Tor image's volume ownership. The local Compose
+project name and `tor-data` volume name are preserved.
+
+The startup script drains Node before stopping Tor, exits on either service's
+unsolicited exit and bounds shutdown at fifteen seconds. Tini handles PID 1
+signal forwarding and orphan reaping. The image supports a read-only root
+filesystem with only `/var/lib/tor` writable.
+
+Local verification on Docker Engine 25.0.3, Linux ARM64:
+
+- The offline Docker check target and production image build pass. The four
+  existing socket integration scenarios remain unchanged.
+- `script/docker-check.sh` passes without network access: graceful SIGTERM,
+  SIGINT, SIGKILL of Node, SIGKILL of Tor, and Tor failure while Node is stopped
+  with SIGSTOP. Normal shutdown exits zero; service failure exits one. The last
+  case verifies the shutdown deadline. Each case removes only its own test
+  container and anonymous volume. The helper identifies executables through
+  `/proc/*/exe`, since Node 24 changes its main thread's name.
+- The isolated `tor-rotator-single-1793642034` Compose deployment reached Tor
+  bootstrap 100%. It ran non-root, with a read-only root filesystem and all
+  capabilities dropped. A Python 3.13 client on the application network received
+  HTTP 200 with the expected body from example.com and HTTPS 200 with IsTor=true
+  from the Tor check endpoint. TLS verification stayed enabled; neither request
+  was retried. Connecting to the container's SOCKS port from that client was
+  refused. The host Bash probe also returned IsTor=true and HTTP/CONNECT 200.
+- The old and new Tor images both use UID 100 and GID 101. Existing deployment
+  volumes were not mounted or changed during this verification.
+- actionlint 1.7.12 accepts the updated workflow. CI now runs container lifecycle
+  checks after building production images and before any release publication.
+
+The live test container stopped with exit zero and no OOM. Its container and
+network were removed; its Tor data volume was retained. The existing Radar
+worker was not restarted. This was a functionality check, not a new resource
+benchmark: BENCHMARK.md and the README explicitly identify the historical
+two-container measurements. AMD64 checks and publication are still gated by CI.
+
 ## November 2, 2026 — package and image naming
 
 Renamed the package and Yarn workspace to `tor-rotator-proxy`. The release
