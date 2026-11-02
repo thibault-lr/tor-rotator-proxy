@@ -11,7 +11,7 @@ are handled internally. HTTPS uses CONNECT, without intercepting TLS.
 ```sh
 docker run -d --name tor-rotator --stop-timeout 20 \
   -p 127.0.0.1:5566:5566 -v tor-data:/var/lib/tor \
-  leroythib0/tor-rotator-proxy:0.3.0
+  leroythib0/tor-rotator-proxy:0.3.1
 docker logs -f tor-rotator
 ```
 
@@ -29,7 +29,7 @@ Add the proxy alongside your scraper in `compose.yaml`:
 ```yaml
 services:
   tor-rotator:
-    image: leroythib0/tor-rotator-proxy:0.3.0
+    image: leroythib0/tor-rotator-proxy:0.3.1
     restart: unless-stopped
     read_only: true
     cap_drop: [ALL]
@@ -80,7 +80,7 @@ request/second, with **20 distinct exit IPs**. Successful latency:
 | Tor       |  1.49% / 10.36% | 15.90 / 16.17 MiB |
 
 Measured on Apple M2 on October 30, 2026; CPU 100% means one logical CPU.
-These are historical measurements, not a benchmark of the combined `0.3.0` image
+These are historical measurements, not a benchmark of the combined `0.3.1` image
 or a capacity guarantee. [Full report and reproduction steps](BENCHMARK.md).
 
 ## Development

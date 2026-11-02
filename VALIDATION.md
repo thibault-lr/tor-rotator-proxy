@@ -1,5 +1,22 @@
 # Validation
 
+## November 2, 2026 — container check correction
+
+The first [main CI run](https://github.com/thibault-lr/tor-rotator-proxy/actions/runs/41495988667)
+passed both architecture checks, production builds and container lifecycle tests.
+The subsequent [v0.3.0 release run](https://github.com/thibault-lr/tor-rotator-proxy/actions/runs/41496666529)
+failed with exit 141 in the lifecycle check before any image was published.
+`grep -q` could close the log pipe before `docker logs` finished writing; with
+`pipefail`, that SIGPIPE incorrectly failed the successful shutdown assertion.
+The helper now consumes the full log stream. Version `0.3.1` carries this test
+correction; the proxy and its startup script are unchanged. The existing release
+tag is preserved instead of being moved to another commit.
+
+The corrected `0.3.1` image passes native checks, the offline Docker check target,
+production build and all five container lifecycle checks on ARM64. Restarting
+with the retained test volume reached bootstrap 100%, and the HTTPS Bash probe
+returned IsTor=true with HTTP/CONNECT 200 before publication.
+
 ## November 2, 2026 — single-container deployment
 
 Version `0.3.0` packages Node, Tor and Tini in one image. The proxy runtime and

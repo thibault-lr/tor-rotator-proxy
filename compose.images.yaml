@@ -1,6 +1,6 @@
 services:
   tor-rotator:
-    image: ${TOR_ROTATOR_IMAGE:-leroythib0/tor-rotator-proxy}:${TOR_ROTATOR_VERSION:-0.3.0}
+    image: ${TOR_ROTATOR_IMAGE:-leroythib0/tor-rotator-proxy}:${TOR_ROTATOR_VERSION:-0.3.1}
     restart: unless-stopped
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]

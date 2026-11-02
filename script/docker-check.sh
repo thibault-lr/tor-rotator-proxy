@@ -68,7 +68,7 @@ expect_exit() {
 start
 docker stop --time 20 "$container" >/dev/null
 expect_exit 0
-docker logs "$container" 2>&1 | grep -q 'Proxy stopped'
+docker logs "$container" 2>&1 | grep 'Proxy stopped' >/dev/null
 echo "PASS: graceful shutdown"
 
 start
