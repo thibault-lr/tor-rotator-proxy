@@ -1,5 +1,32 @@
 # Validation
 
+## November 2, 2026 — published single-image verification
+
+[Release v0.3.1](https://github.com/thibault-lr/tor-rotator-proxy/releases/tag/v0.3.1)
+targets `b53355793de32d731b315f7dc391f152526590fa`. Both its
+[main CI](https://github.com/thibault-lr/tor-rotator-proxy/actions/runs/41498003631)
+and [release workflow](https://github.com/thibault-lr/tor-rotator-proxy/actions/runs/41498216095)
+passed architecture checks, production builds and container lifecycle tests.
+The release workflow then published one public Docker Hub image:
+
+```text
+leroythib0/tor-rotator-proxy:0.3.1
+sha256:6147a87e5a32b198c7eb61d1c51ade8aefd7ecbe54486bc1ad20b54fa99d9562
+```
+
+Unauthenticated registry metadata confirms Linux AMD64 and ARM64 manifests.
+The ARM64 image was pulled using an empty Docker credentials directory. Its OCI
+labels identify the expected repository, release commit, version and MIT license.
+
+That downloaded image was started in the isolated Compose project using its
+retained Tor volume. After bootstrap 100%, a separate Python client container
+passed HTTP forwarding and HTTPS with certificate verification and IsTor=true,
+without retries. Its connection to the SOCKS port was refused. The published
+container then stopped with exit zero and no OOM; its container and network were
+removed. The task's Tor state volume was retained, and the existing Radar worker
+was left running. Live public Tor checks used ARM64; AMD64 lifecycle checks ran
+on GitHub's runner. No new resource benchmark was performed.
+
 ## November 2, 2026 — container check correction
 
 The first [main CI run](https://github.com/thibault-lr/tor-rotator-proxy/actions/runs/41495988667)
