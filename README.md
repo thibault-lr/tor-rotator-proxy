@@ -10,7 +10,7 @@ AMD64 and ARM64.
 
 ## Use in your scraper project
 
-Download [compose.images.yaml](https://github.com/thibault-lr/tor-rotator/releases/download/v0.2.0/compose.images.yaml)
+Download [compose.images.yaml](https://github.com/thibault-lr/tor-rotator-proxy/releases/download/v0.2.0/compose.images.yaml)
 into your project. Requires Docker Compose 2.20.3+.
 
 Add to your project's `.env`:
